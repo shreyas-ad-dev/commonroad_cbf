@@ -24,8 +24,11 @@ def draw_obstacle_trajectories(ax, obstacles, zorder=50):
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.5, zorder=zorder)
 
 def render_frame(scenario, planning_problem_set, ego_obstacle, ego_corners, 
+                 ego_state, d_safe, h_val, radar_range, radar_fov_deg, 
                  surrounding_states, has_collided, step, num_steps, speed, frame_path):
-    """Renders a single simulation frame and saves to disk."""
+    """
+    Renders simulation frame with a distinctly shaded Radar FOV cone and CBF safety buffer.
+    """
     fig, ax = plt.subplots(figsize=(14, 5))
     renderer = MPRenderer(ax=ax)
 
@@ -33,7 +36,6 @@ def render_frame(scenario, planning_problem_set, ego_obstacle, ego_corners,
     planning_problem_set.draw(renderer)
     renderer.render()
 
-    # Soften lanelet fill colors
     for patch in ax.patches:
         patch.set_zorder(1)
         if patch.get_facecolor() in [(1.0, 0.8, 0.0, 1.0), (1.0, 0.7568627450980392, 0.027450980392156862, 1.0)]:
@@ -41,12 +43,56 @@ def render_frame(scenario, planning_problem_set, ego_obstacle, ego_corners,
 
     draw_obstacle_trajectories(ax, [obs for obs, _ in surrounding_states], zorder=50)
 
-    # Draw surrounding obstacles
+    ego_x, ego_y, ego_orient, ego_l, ego_w = ego_state
+    cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
+    front_x = ego_x + (ego_l / 2.0) * cos_a
+    front_y = ego_y + (ego_l / 2.0) * sin_a
+
+    # 1. Render Radar FOV Cone with a clear, discernible shaded fill
+    fov_wedge = patches.Wedge(
+        center=(front_x, front_y),
+        r=radar_range,
+        theta1=np.degrees(ego_orient) - (radar_fov_deg / 2.0),
+        theta2=np.degrees(ego_orient) + (radar_fov_deg / 2.0),
+        facecolor="#00E5FF",
+        alpha=0.22,           # Increased shading intensity for clear discernment
+        edgecolor="#0099CC",  # Clearer outline border color
+        linestyle="-",
+        linewidth=1.0,
+        zorder=70
+    )
+    ax.add_patch(fov_wedge)
+
+    # 2. Render CBF Safety Buffer Zone
+    w2 = ego_w / 2.0
+    local_buffer = np.array([
+        [0.0, -w2],
+        [d_safe, -w2],
+        [d_safe, w2],
+        [0.0, w2]
+    ])
+    rot_mat = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    world_buffer = local_buffer @ rot_mat.T + np.array([front_x, front_y])
+
+    if h_val is None or h_val > 5.0:
+        zone_color, zone_alpha = "#2ECC71", 0.25
+    elif h_val > 0.0:
+        zone_color, zone_alpha = "#F39C12", 0.40
+    else:
+        zone_color, zone_alpha = "#E74C3C", 0.55
+
+    ax.add_patch(patches.Polygon(
+        world_buffer, closed=True, 
+        facecolor=zone_color, edgecolor=zone_color, 
+        alpha=zone_alpha, linestyle="--", linewidth=1.5, zorder=80
+    ))
+
+    # 3. Draw surrounding obstacles
     for obs, (corners, is_hit) in surrounding_states:
         obs_color = "#E67E22" if is_hit else "#1F77B4"
         ax.add_patch(patches.Polygon(corners, closed=True, facecolor=obs_color, edgecolor="black", linewidth=1.2, zorder=100))
 
-    # Draw Ego Vehicle: GREEN (#00FF00) normally, RED (#FF0000) on collision
+    # 4. Draw Ego Vehicle
     ego_color = "#FF0000" if has_collided else "#00FF00"
     ax.add_patch(patches.Polygon(
         ego_corners, closed=True,
@@ -56,9 +102,10 @@ def render_frame(scenario, planning_problem_set, ego_obstacle, ego_corners,
         zorder=110
     ))
 
-    # Custom Legend
-    ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=10, label=f"Ego Vehicle (Obs #{ego_obstacle.obstacle_id})")
-    ax.plot([], [], color="#1F77B4", marker="s", ls="", markersize=10, label="Surrounding Vehicles")
+    # Legend & Annotations
+    ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=10, label=f"Ego (Obs #{ego_obstacle.obstacle_id})")
+    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Radar FOV ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
+    ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Safety Buffer ({d_safe:.1f}m)")
     ax.plot([], [], color="black", linestyle=":", label="Prediction Trajectory")
 
     if has_collided:
@@ -70,7 +117,8 @@ def render_frame(scenario, planning_problem_set, ego_obstacle, ego_corners,
     ax.set_xlim(-130, -30)
     ax.set_ylim(-5, 20)
 
-    title_text = f"ZAM_Zip-1_64 | Step {step}/{num_steps} (t={step * scenario.dt:.1f}s) | v={speed:.1f} m/s"
+    h_str = f" | h(x)={h_val:.2f}" if h_val is not None else " | h(x)=N/A"
+    title_text = f"ZAM_Zip-1_64 | Step {step}/{num_steps} (t={step * scenario.dt:.1f}s) | v={speed:.1f} m/s{h_str}"
     if has_collided:
         title_text += " ⚠️ COLLISION FROZEN!"
     ax.set_title(title_text, color="red" if has_collided else "black", fontweight="bold" if has_collided else "normal")
