@@ -4,12 +4,26 @@ import numpy as np
 from src.scenario_loader import load_scenario_and_ego
 from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame, create_gif_from_frames
-from src.cbf_solver import CBFQPSolver
 from src.radar import RadarSensor
+from src.cbf_solver import CBFQPSolver
 
-# Path setup
+# -----------------------------------------------------------------------------
+# 0. Scenario Configuration
+# -----------------------------------------------------------------------------
+SCENARIO_NAME = "ZAM"  # Set to "USA" or "ZAM"
+SHOW_TRAJECTORIES = True # Set to True if you want dotted path predictions
+
 PROJECT_ROOT = Path(__file__).resolve().parent
-XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_64_T-1.xml"
+
+if SCENARIO_NAME == "USA":
+    XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
+    GIF_NAME = "usa_us101_radar_cbf.gif"
+    NUM_STEPS = 60
+else:
+    XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_64_T-1.xml"
+    GIF_NAME = "zam_zip_radar_cbf.gif"
+    NUM_STEPS = 40
+
 FRAMES_DIR = PROJECT_ROOT / "frames"
 
 # Clean frames directory
@@ -18,60 +32,67 @@ if FRAMES_DIR.exists():
         f.unlink()
 FRAMES_DIR.mkdir(exist_ok=True)
 
-# 1. Load Scenario and Auto-Select Ego
-scenario, planning_set, ego_obstacle, surrounding_obstacles = load_scenario_and_ego(XML_FILE)
+# -----------------------------------------------------------------------------
+# 1. Load Scenario via Standardized Loader
+# -----------------------------------------------------------------------------
+scen_data = load_scenario_and_ego(XML_FILE)
 
-print(f"🚗 Automatically Selected Ego Vehicle ID: {ego_obstacle.obstacle_id}")
-print(f"   Initial Position: ({ego_obstacle.initial_state.position[0]:.2f}, {ego_obstacle.initial_state.position[1]:.2f})")
+scenario = scen_data['scenario']
+planning_set = scen_data['planning_problem_set']
+ego_params = scen_data['ego_params']
+surrounding_obstacles = scen_data['surrounding_obstacles']
 
-# 2. Simulation Parameters & Modules
+print(f" Loaded Scenario: {scenario.scenario_id}")
+print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
+
+# -----------------------------------------------------------------------------
+# 2. State Initialization & Module Setup
+# -----------------------------------------------------------------------------
 DESIRED_SPEED = 20.0  # m/s
-num_steps = 40
-frame_files = []
 
-# Dynamic Ego state variables
-ego_x = float(ego_obstacle.initial_state.position[0])
-ego_y = float(ego_obstacle.initial_state.position[1])
-ego_orient = float(getattr(ego_obstacle.initial_state, "orientation", 0.0))
-ego_v = DESIRED_SPEED
+ego_x = ego_params['x']
+ego_y = ego_params['y']
+ego_orient = ego_params['orientation']
+ego_v = ego_params['velocity']
+ego_l = ego_params['length']
+ego_w = ego_params['width']
 
-ego_l = getattr(ego_obstacle.obstacle_shape, 'length', 4.5)
-ego_w = getattr(ego_obstacle.obstacle_shape, 'width', 2.0)
-
-# Instantiate Radar & CBF Solver
+print(f"Ego orient is {ego_orient}") # Instantiate Perception & Control Modules
 radar = RadarSensor(range_max=70.0, fov_deg=60.0)
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 
-# Collision state tracking
+# Collision tracking state
 has_collided = False
 collision_step = None
 collided_obstacle_id = None
 frozen_obs_states = {}
+frame_files = []
 
+# -----------------------------------------------------------------------------
 # 3. Main Simulation Loop
-for step in range(num_steps):
-    # Track target using Radar perception cone
+# -----------------------------------------------------------------------------
+for step in range(NUM_STEPS):
+    # Track lead vehicle via radar perception cone
     lead_target = radar.track_lead_vehicle(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
     
-    # Calculate safety distance required at current speed
+    # Calculate required CBF safe distance
     d_safe = cbf_solver.d_min + (ego_v * cbf_solver.tau)
-    
+
     if lead_target is not None and not has_collided:
-        target_x, target_y, target_v, target_id = lead_target
-        h_val = cbf_solver.compute_barrier(ego_x, ego_v, target_x)
+        target_x, target_y, target_v, target_id, x_local = lead_target
+        h_val = cbf_solver.compute_barrier(x_local, ego_v)
         
-        # Solve CBF-QP control action
+        # Compute safe acceleration from CBF-QP
         u_control = cbf_solver.solve(
-            x_ego=ego_x, 
-            v_ego=ego_v, 
-            x_target=target_x, 
-            v_target=target_v, 
-            v_des=DESIRED_SPEED, 
+            longitudinal_dist=x_local,
+            v_ego=ego_v,
+            v_target=target_v,
+            v_des=DESIRED_SPEED,
             dt=scenario.dt
         )
     else:
         h_val = None
-        u_control = 0.0
+        u_control = 0.5 * (DESIRED_SPEED - ego_v)  # Smooth acceleration to cruising speed
 
     # Propagate Ego Dynamics
     if not has_collided:
@@ -82,7 +103,7 @@ for step in range(num_steps):
     ego_poly, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     surrounding_render_states = []
 
-    # Process surrounding traffic
+    # Process surrounding vehicle state updates & collision check
     for obs in surrounding_obstacles:
         if has_collided and obs.obstacle_id == collided_obstacle_id:
             ox, oy, o_orient = frozen_obs_states[obs.obstacle_id]
@@ -97,47 +118,47 @@ for step in range(num_steps):
         w = getattr(obs.obstacle_shape, 'width', 2.0)
         obs_poly, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
 
-        # Detect impact
         if not has_collided and ego_poly.intersects(obs_poly):
             has_collided = True
             collision_step = step
             collided_obstacle_id = obs.obstacle_id
             frozen_obs_states[obs.obstacle_id] = (ox, oy, o_orient)
 
-        is_hit_target = has_collided and (obs.obstacle_id == collided_obstacle_id)
-        surrounding_render_states.append((obs, (obs_corners, is_hit_target)))
+        is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
+        surrounding_render_states.append((obs, obs_corners, is_hit))
 
-    # Render frame
+    # Render frame with standardized visualizer call
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
-        scenario, 
-        planning_set, 
-        ego_obstacle, 
-        ego_corners,
-        (ego_x, ego_y, ego_orient, ego_l, ego_w), 
-        d_safe, 
-        h_val,
-        radar.range_max, 
-        np.degrees(radar.fov_rad * 2.0), 
-        surrounding_render_states, 
-        has_collided, 
-        step, 
-        num_steps,
-        ego_v, 
-        frame_path
+        scenario=scenario,
+        planning_problem_set=planning_set,
+        ego_state=(ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w),
+        d_safe=d_safe,
+        h_val=h_val,
+        radar_range=radar.range_max,
+        radar_fov_deg=radar.fov_deg,
+        surrounding_states=surrounding_render_states,
+        has_collided=has_collided,
+        step=step,
+        num_steps=NUM_STEPS,
+        frame_path=frame_path,
+        show_trajectories=SHOW_TRAJECTORIES
     )
+
     frame_files.append(frame_path)
 
+# -----------------------------------------------------------------------------
 # 4. Generate Output GIF & Clean Up
-gif_path = PROJECT_ROOT / "simulation_radar_cbf.gif"
+# -----------------------------------------------------------------------------
+gif_path = PROJECT_ROOT / GIF_NAME
 create_gif_from_frames(frame_files, gif_path, scenario.dt)
 
 for f in frame_files:
     f.unlink()
 FRAMES_DIR.rmdir()
 
-print(f"\n✅ Simulation Complete! Output saved to: '{gif_path.name}'")
+print(f"\n Simulation Complete! Output saved to: '{gif_path.name}'")
 if has_collided:
     print(f"💥 Collision detected at Step {collision_step}.")
 else:
-    print("🛡️ SAFE! Early Radar detection enabled smooth CBF safety control—zero collision!")
+    print("🛡️ SAFE! CBF Safety Control maintained nominal distance.")
