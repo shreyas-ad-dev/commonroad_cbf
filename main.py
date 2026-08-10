@@ -6,19 +6,77 @@ from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame, create_gif_from_frames
 from src.radar import RadarSensor
 from src.cbf_solver import CBFQPSolver
+from src.lateral_controller import StanleyController
 
+def get_current_lane_width(scenario, ego_x: float, ego_y: float, default_width: float = 3.5) -> float:
+    """
+    Finds the lanelet surrounding (ego_x, ego_y) and computes its local width
+    by measuring the distance between its left and right boundaries.
+    """
+    # 1. Find lanelets containing the vehicle position
+    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
+    
+    if not lanelet_ids:
+        return default_width
+
+    # 2. Extract the active lanelet object
+    lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+    
+    # 3. Calculate distance between left and right boundary vertices
+    left_verts = lanelet.left_vertices
+    right_verts = lanelet.right_vertices
+    
+    # Compute widths along all vertices and return the mean/median width
+    widths = np.hypot(left_verts[:, 0] - right_verts[:, 0], left_verts[:, 1] - right_verts[:, 1])
+    
+    return float(np.mean(widths))
+
+def generate_lane_change_path(start_x, start_y, road_heading, target_lane_offset=3.5, total_length=150.0, num_points=200):
+    """
+    Generates waypoints for a lane change along an angled road track.
+    
+    road_heading: Initial road orientation in radians (e.g., -0.62 rad for US-101)
+    target_lane_offset: Distance to adjacent lane in meters (+3.5m left, -3.5m right)
+    """
+    # 1. Distance along track axis
+    s = np.linspace(0, total_length, num_points)
+    
+    # 2. Smooth S-curve transition profile (Quintic polynomial)
+    start_lc, lc_length = 10.0, 35.0
+    d_offset = np.zeros_like(s)
+    
+    for i, si in enumerate(s):
+        if si < start_lc:
+            d_offset[i] = 0.0
+        elif si > start_lc + lc_length:
+            d_offset[i] = target_lane_offset
+        else:
+            t = (si - start_lc) / lc_length
+            d_offset[i] = target_lane_offset * (6 * t**5 - 15 * t**4 + 10 * t**3)
+
+    # 3. Direction vectors: Forward (u_hat) and Perpendicular Normal (n_hat)
+    u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
+    n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
+
+    # 4. Map back to global coordinates
+    path_points = []
+    for i in range(num_points):
+        pt = np.array([start_x, start_y]) + s[i] * u_hat + d_offset[i] * n_hat
+        path_points.append(pt)
+
+    return np.array(path_points)
 # -----------------------------------------------------------------------------
 # 0. Scenario Configuration
 # -----------------------------------------------------------------------------
-SCENARIO_NAME = "ZAM"  # Set to "USA" or "ZAM"
-SHOW_TRAJECTORIES = True # Set to True if you want dotted path predictions
+SCENARIO_NAME = "USA"  # Set to "USA" or "ZAM"
+SHOW_TRAJECTORIES = False # Set to True if you want dotted path predictions
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 if SCENARIO_NAME == "USA":
     XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
     GIF_NAME = "usa_us101_radar_cbf.gif"
-    NUM_STEPS = 60
+    NUM_STEPS = 80
 else:
     XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_64_T-1.xml"
     GIF_NAME = "zam_zip_radar_cbf.gif"
@@ -60,6 +118,7 @@ ego_w = ego_params['width']
 print(f"Ego orient is {ego_orient}") # Instantiate Perception & Control Modules
 radar = RadarSensor(range_max=70.0, fov_deg=60.0)
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
+stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
 # Collision tracking state
 has_collided = False
@@ -67,6 +126,13 @@ collision_step = None
 collided_obstacle_id = None
 frozen_obs_states = {}
 frame_files = []
+lane_width = get_current_lane_width(scenario, ego_x=ego_params['x'], ego_y=ego_params['y'])
+target_path = generate_lane_change_path(
+        start_x=ego_params['x'],
+        start_y=ego_params['y'],
+        road_heading=ego_params['orientation'],
+        target_lane_offset=lane_width
+        )
 
 # -----------------------------------------------------------------------------
 # 3. Main Simulation Loop
@@ -96,9 +162,25 @@ for step in range(NUM_STEPS):
 
     # Propagate Ego Dynamics
     if not has_collided:
-        ego_v = max(0.0, ego_v + u_control * scenario.dt)
-        ego_x += ego_v * scenario.dt * np.cos(ego_orient)
-        ego_y += ego_v * scenario.dt * np.sin(ego_orient)
+        if SCENARIO_NAME == "ZAM":
+            ego_v = max(0.0, ego_v + u_control * scenario.dt)
+            ego_x += ego_v * scenario.dt * np.cos(ego_orient)
+            ego_y += ego_v * scenario.dt * np.sin(ego_orient)
+        else: 
+            steering_angle = stanley_ctrl.compute_steering(
+                    ego_x,
+                    ego_y,
+                    ego_orient,
+                    ego_v,
+                    target_path
+                    )
+
+            L = stanley_ctrl.wheelbase
+            ego_v = max(0,0, ego_v + u_control * scenario.dt)
+            ego_orient += (ego_v/L) * np.tan(steering_angle) * scenario.dt
+            ego_x += ego_v * np.cos(ego_orient) * scenario.dt
+            ego_y += ego_v * np.sin(ego_orient) * scenario.dt
+
 
     ego_poly, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     surrounding_render_states = []
