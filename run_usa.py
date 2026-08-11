@@ -22,7 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
 GIF_NAME = "usa_us101_radar_cbf.gif"
 NUM_STEPS = 80
-DESIRED_SPEED = 20.0  # m/s
+DESIRED_SPEED = 30.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
 
@@ -61,7 +61,8 @@ stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 lane_width = get_current_lane_width(scenario, ego_x=ego_params["x"], ego_y=ego_params["y"])
 
 # USA changes lane to the left (+lane_width) with no positional delay (trigger_x=None)
-planner = BehaviorPlanner(target_offset=lane_width)
+planner = BehaviorPlanner(mode="GAP_SEARCH", target_offset=lane_width, start_distance=75.0)
+#planner = BehaviorPlanner(target_offset=lane_width)
 target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
 
 has_collided = False

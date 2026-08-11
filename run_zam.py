@@ -60,7 +60,8 @@ stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
 lane_width = get_current_lane_width(scenario, ego_x=ego_params["x"], ego_y=ego_params["y"])
 
-planner = BehaviorPlanner(target_offset=-lane_width)
+planner = BehaviorPlanner(mode="MAP_FOLLOW")
+#planner = BehaviorPlanner(target_offset=-lane_width)
 target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
 
 has_collided = False

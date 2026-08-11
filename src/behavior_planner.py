@@ -3,31 +3,51 @@ import numpy as np
 from src.lateral_controller import (generate_lane_change_path, extract_target_lanelet_path)
 
 class BehaviorPlanner:
-    def __init__(self, target_offset: float):
+    def __init__(self, mode: str = "GAP_SEARCH", target_offset: float = 0.0, start_distance: float = 0.0):
         """
-        :param target_offset: Positive for USA (left shift), Negative for ZAM (right shift)
+        :param mode: "GAP_SEARCH" (dynamic S-curve into adjacent lane) or "MAP_FOLLOW" (follow CommonRoad XML geometry)
+        :param target_offset: Lateral distance offset for gap searching (+ left, - right)
+        :param start_distance: Distance traveled (in meters) before planner activates gap search/maneuver
         """
+        if mode not in ["GAP_SEARCH", "MAP_FOLLOW"]:
+            raise ValueError("mode must be either 'GAP_SEARCH' or 'MAP_FOLLOW'")
+            
+        self.mode = mode
         self.target_offset = target_offset
+        self.start_distance = start_distance
         self.state = "LANE_KEEP"
+        
+        self.start_x = None
+        self.start_y = None
 
     def update_plan(self, scenario, ego_x, ego_y, ego_orient, surrounding_obstacles, step, radar, current_path):
-        # For ZAM zip-merge, Ego simply follows the map's lanelet path (which includes the natural merge curve)
-        if self.target_offset < 0:  # ZAM scenario indicator
-            # Re-extracting path keeps Ego aligned with CommonRoad's successor lanelet geometry
-            updated_path = extract_target_lanelet_path(scenario, ego_x, ego_y)
-            return "ZIP_MERGE", updated_path
+        # Record initial position on step 0 to calculate distance traveled
+        if self.start_x is None or self.start_y is None:
+            self.start_x = ego_x
+            self.start_y = ego_y
 
-        # For USA highway, perform dynamic gap checking for proactive S-curve lane change
+        # Mode 1: MAP_FOLLOW -> Follow CommonRoad XML lanelet network directly
+        if self.mode == "MAP_FOLLOW":
+            updated_path = extract_target_lanelet_path(scenario, ego_x, ego_y)
+            return "MAP_FOLLOW", updated_path
+
+        # Mode 2: GAP_SEARCH -> Dynamic S-curve planner
         if self.state == "LANE_CHANGE":
             return self.state, current_path
 
+        # Check if Ego has traveled the required distance window before checking gaps
+        distance_traveled = np.hypot(ego_x - self.start_x, ego_y - self.start_y)
+        if distance_traveled < self.start_distance:
+            return self.state, current_path
+
+        # Evaluate adjacent lane clearance via radar
         is_clear = radar.is_adjacent_lane_clear(
             ego_x, ego_y, ego_orient, surrounding_obstacles, step, self.target_offset
         )
 
         if is_clear:
             self.state = "LANE_CHANGE"
-            print(f"🚀 [Step {step}] Target lane clear! Initiating dynamic lane change.")
+            print(f"🚀 [Step {step} | Dist: {distance_traveled:.1f}m] Gap clear! Initiating dynamic lane change.")
             new_path = generate_lane_change_path(
                 start_x=ego_x,
                 start_y=ego_y,
