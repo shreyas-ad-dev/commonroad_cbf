@@ -42,7 +42,7 @@ class BehaviorPlanner:
 
         # Evaluate adjacent lane clearance via radar
         is_clear = radar.is_adjacent_lane_clear(
-            ego_x, ego_y, ego_orient, surrounding_obstacles, step, self.target_offset
+            ego_x, ego_y, ego_orient, surrounding_obstacles, step, self.target_offset, safety_gap_front=15.0, safety_gap_rear=18.0, road_heading=ego_orient
         )
 
         if is_clear:

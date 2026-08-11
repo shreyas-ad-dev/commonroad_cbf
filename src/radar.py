@@ -52,7 +52,8 @@ class RadarSensor:
         step: int, 
         lane_corridor_width: float = 2.5,
         target_offset: float = 0.0,
-        road_heading: Optional[float] = None
+        road_heading: Optional[float] = None,
+        is_changing_lane: bool = False
     ) -> Optional[Tuple[float, float, float, object, float]]:
         """
         Scans vehicles in Ego's rotated FOV cone and tracks the closest lead vehicle.
@@ -87,7 +88,7 @@ class RadarSensor:
 
             if long_road > 0.0:  # Vehicle must be ahead along the road
                 in_current_lane = abs(lat_road) <= half_corridor
-                in_target_lane = abs(lat_road - target_offset) <= half_corridor
+                in_target_lane = is_changing_lane and abs(lat_road - target_offset) <= half_corridor
 
                 if in_current_lane or in_target_lane:
                     if dist < closest_dist:
@@ -108,6 +109,7 @@ class RadarSensor:
         target_lane_offset: float,
         safety_gap_front: float = 12.0,
         safety_gap_rear: float = 10.0,
+        road_heading: Optional[float] = None
     ) -> bool:
         """
         Checks if the target adjacent lane is free of obstacles within a 
@@ -117,19 +119,24 @@ class RadarSensor:
         safety_gap_front: Minimum safe distance ahead in target lane (meters)
         safety_gap_rear: Minimum safe distance behind in target lane (meters)
         """
+        ref_heading = road_heading if road_heading is not None else ego_yaw
         # Direction vectors in Ego frame
-        u_hat = np.array([np.cos(ego_yaw), np.sin(ego_yaw)])   # Forward
-        n_hat = np.array([-np.sin(ego_yaw), np.cos(ego_yaw)])  # Perpendicular (Left)
+        u_hat = np.array([np.cos(ref_heading), np.sin(ref_heading)])   # Forward
+        n_hat = np.array([-np.sin(ref_heading), np.cos(ref_heading)])  # Perpendicular (Left)
 
         for obs in surrounding_obstacles:
             st = obs.state_at_time(step)
             if st is None:
                 continue
 
-            # Vector from Ego to Obstacle
-            dx = st.position[0] - ego_x
-            dy = st.position[1] - ego_y
+            ox,oy = st.position[0], st.position[1]
+            in_fov, _, _, _ = self.is_in_fov(ego_x, ego_y, ego_yaw, ox, oy)
+            if not in_fov:
+                continue
 
+            # Vector from Ego to Obstacle
+            dx,dy  = ox - ego_x, oy - ego_y
+            
             # Project into Ego local frame
             longitudinal_dist = dx * u_hat[0] + dy * u_hat[1]
             lateral_dist = dx * n_hat[0] + dy * n_hat[1]
