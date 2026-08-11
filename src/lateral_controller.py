@@ -42,27 +42,6 @@ def extract_target_lanelet_path(scenario, ego_x: float, ego_y: float, horizon_me
     return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
 
 
-def extract_target_lanelet_path(scenario, ego_x: float, ego_y: float) -> np.ndarray:
-    """
-    Finds the lanelet surrounding (ego_x, ego_y) and extracts its centerline vertices 
-    to serve as the reference path for tracking.
-    """
-    # 1. Find lanelets containing the vehicle position
-    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
-
-    if not lanelet_ids:
-        # Fallback: Find nearest lanelet if not strictly inside polygon
-        lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
-        if not lanelet_ids:
-            raise ValueError(f"No lanelet found near position ({ego_x}, {ego_y})")
-
-    # 2. Extract the active lanelet object
-    lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
-
-    # 3. Return the centerline as an Nx2 numpy array
-    return np.array(lanelet.center_vertices)
-
-
 def get_current_lane_width(scenario, ego_x: float, ego_y: float, default_width: float = 3.5) -> float:
     """
     Finds the lanelet surrounding (ego_x, ego_y) and computes its local width

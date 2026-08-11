@@ -11,8 +11,9 @@ from src.lateral_controller import (
 )
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
+from src.utils import setup_frames_directory, build_gif_and_cleanup
 from src.vehicle_dynamics import get_car_polygon
-from src.visualizer import create_gif_from_frames, render_frame
+from src.visualizer import render_frame
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -25,11 +26,7 @@ NUM_STEPS = 80
 DESIRED_SPEED = 25.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
-
-if FRAMES_DIR.exists():
-    for f in FRAMES_DIR.glob("*.png"):
-        f.unlink()
-FRAMES_DIR.mkdir(exist_ok=True)
+setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------
 # 1. Load Scenario
@@ -171,11 +168,7 @@ for step in range(NUM_STEPS):
 # 4. GIF Generation & Cleanup
 # -----------------------------------------------------------------------------
 gif_path = PROJECT_ROOT / GIF_NAME
-create_gif_from_frames(frame_files, gif_path, scenario.dt)
-
-for f in frame_files:
-    f.unlink()
-FRAMES_DIR.rmdir()
+build_gif_and_cleanup(frame_files, gif_path, scenario.dt)
 
 print(f"\n USA Simulation Complete! Output saved to: '{gif_path.name}'")
 if has_collided:

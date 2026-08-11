@@ -1,4 +1,5 @@
 from pathlib import Path
+from src.vehicle_dynamics import get_car_polygon
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -100,7 +101,6 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
         ))
 
     # 5. Render Ego Vehicle
-    from src.vehicle_dynamics import get_car_polygon
     _, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     
     ego_color = "#FF0000" if has_collided else "#00FF00"
