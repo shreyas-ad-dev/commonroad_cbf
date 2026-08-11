@@ -71,6 +71,7 @@ The simulation loop processes every step through four sequential pipelines:
 
 ### 1. Clone the Repository
 git clone [https://github.com/your-username/cbf_qp.git](https://github.com/your-username/cbf_qp.git)
+
 cd cbf_qp
 ### 2. Create and Activate a Virtual Environment
 * **Linux / macOS:**
