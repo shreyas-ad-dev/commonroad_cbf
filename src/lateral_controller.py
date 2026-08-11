@@ -1,4 +1,66 @@
+from scipy.interpolate import interp1d
 import numpy as np
+
+def extract_target_lanelet_path(scenario, ego_x: float, ego_y: float, horizon_meters: float = 200.0) -> np.ndarray:
+    """
+    Universally extracts and chains lanelet centerlines along the successor path 
+    from the Ego vehicle's start position across ANY CommonRoad scenario.
+    """
+    # 1. Find initial lanelet
+    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
+    if not lanelet_ids:
+        raise ValueError(f"No lanelet found near position ({ego_x}, {ego_y})")
+
+    current_lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+    all_center_verts = [np.array(current_lanelet.center_vertices)]
+    
+    total_length = 0.0
+    for verts in all_center_verts:
+        total_length += np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1])))
+
+    # 2. Chain successor lanelets until horizon_meters is reached
+    while total_length < horizon_meters and current_lanelet.successor:
+        next_id = current_lanelet.successor[0]  # Follow primary successor
+        current_lanelet = scenario.lanelet_network.find_lanelet_by_id(next_id)
+        
+        next_verts = np.array(current_lanelet.center_vertices)
+        all_center_verts.append(next_verts[1:])  # Skip duplicate start vertex
+        
+        total_length += np.sum(np.hypot(np.diff(next_verts[:, 0]), np.diff(next_verts[:, 1])))
+
+    # 3. Combine chained points
+    center_verts = np.vstack(all_center_verts)
+
+    # 4. Resample densely every 0.5m
+    distances = np.zeros(len(center_verts))
+    distances[1:] = np.cumsum(np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1])))
+
+    s_dense = np.arange(0, distances[-1], 0.5)
+    interp_x = interp1d(distances, center_verts[:, 0], kind='linear')
+    interp_y = interp1d(distances, center_verts[:, 1], kind='linear')
+
+    return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
+
+
+def extract_target_lanelet_path(scenario, ego_x: float, ego_y: float) -> np.ndarray:
+    """
+    Finds the lanelet surrounding (ego_x, ego_y) and extracts its centerline vertices 
+    to serve as the reference path for tracking.
+    """
+    # 1. Find lanelets containing the vehicle position
+    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
+
+    if not lanelet_ids:
+        # Fallback: Find nearest lanelet if not strictly inside polygon
+        lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([np.array([ego_x, ego_y])])[0]
+        if not lanelet_ids:
+            raise ValueError(f"No lanelet found near position ({ego_x}, {ego_y})")
+
+    # 2. Extract the active lanelet object
+    lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+
+    # 3. Return the centerline as an Nx2 numpy array
+    return np.array(lanelet.center_vertices)
 
 
 def get_current_lane_width(scenario, ego_x: float, ego_y: float, default_width: float = 3.5) -> float:

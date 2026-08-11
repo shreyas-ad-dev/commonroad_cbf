@@ -1,12 +1,18 @@
 from pathlib import Path
+
 import numpy as np
 
+from src.cbf_solver import CBFQPSolver
+from src.lateral_controller import (
+    StanleyController,
+    generate_lane_change_path,
+    get_current_lane_width,
+    extract_target_lanelet_path
+)
+from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
 from src.vehicle_dynamics import get_car_polygon
-from src.visualizer import render_frame, create_gif_from_frames
-from src.radar import RadarSensor
-from src.cbf_solver import CBFQPSolver
-from src.lateral_controller import ( StanleyController, get_current_lane_width, generate_lane_change_path)
+from src.visualizer import create_gif_from_frames, render_frame
 
 # -----------------------------------------------------------------------------
 # 0. Scenario Configuration
@@ -23,7 +29,7 @@ if SCENARIO_NAME == "USA":
 else:
     XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_64_T-1.xml"
     GIF_NAME = "zam_zip_radar_cbf.gif"
-    NUM_STEPS = 40
+    NUM_STEPS = 100
 
 FRAMES_DIR = PROJECT_ROOT / "frames"
 
@@ -74,12 +80,15 @@ frame_files = []
 lane_width = get_current_lane_width(
     scenario, ego_x=ego_params["x"], ego_y=ego_params["y"]
 )
-target_path = generate_lane_change_path(
-    start_x=ego_params["x"],
-    start_y=ego_params["y"],
-    road_heading=ego_params["orientation"],
-    target_lane_offset=lane_width,
-)
+if SCENARIO_NAME == "USA":
+    target_path = generate_lane_change_path(
+            start_x=ego_params["x"],
+            start_y=ego_params["y"],
+            road_heading=ego_params["orientation"],
+            target_lane_offset=lane_width
+            )
+else: 
+    target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
 
 # -----------------------------------------------------------------------------
 # 3. Main Simulation Loop
@@ -113,20 +122,15 @@ for step in range(NUM_STEPS):
 
     # Propagate Ego Dynamics
     if not has_collided:
-        if SCENARIO_NAME == "ZAM":
-            ego_v = max(0.0, ego_v + u_control * scenario.dt)
-            ego_x += ego_v * scenario.dt * np.cos(ego_orient)
-            ego_y += ego_v * scenario.dt * np.sin(ego_orient)
-        else:
-            steering_angle = stanley_ctrl.compute_steering(
+        steering_angle = stanley_ctrl.compute_steering(
                 ego_x, ego_y, ego_orient, ego_v, target_path
-            )
+                )
 
-            L = stanley_ctrl.wheelbase
-            ego_v = max(0, 0, ego_v + u_control * scenario.dt)
-            ego_orient += (ego_v / L) * np.tan(steering_angle) * scenario.dt
-            ego_x += ego_v * np.cos(ego_orient) * scenario.dt
-            ego_y += ego_v * np.sin(ego_orient) * scenario.dt
+        L = stanley_ctrl.wheelbase
+        ego_v = max(0.0, ego_v + u_control * scenario.dt)
+        ego_orient += (ego_v / L) * np.tan(steering_angle) * scenario.dt
+        ego_x += ego_v * np.cos(ego_orient) * scenario.dt
+        ego_y += ego_v * np.sin(ego_orient) * scenario.dt
 
     ego_poly, ego_corners = get_car_polygon(
         ego_x, ego_y, ego_orient, length=ego_l, width=ego_w
