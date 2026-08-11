@@ -74,7 +74,7 @@ stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 lane_width = get_current_lane_width(
     scenario, ego_x=ego_params["x"], ego_y=ego_params["y"]
 )
-planner = BehaviorPlanner(scenario_name=SCENARIO_NAME, target_offset=-lane_width)
+planner = BehaviorPlanner(scenario_name=SCENARIO_NAME, target_offset=lane_width)
 target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
 
 # Collision tracking state
@@ -102,8 +102,10 @@ for step in range(NUM_STEPS):
 
     # Track lead vehicle via radar perception cone
     lead_target = radar.track_lead_vehicle(
-        ego_x, ego_y, ego_orient, surrounding_obstacles, step
-    )
+    ego_x, ego_y, ego_orient, surrounding_obstacles, step,
+    target_offset=planner.target_offset,
+    road_heading=ego_orient  
+)
 
     # Calculate required CBF safe distance
     d_safe = cbf_solver.d_min + (ego_v * cbf_solver.tau)

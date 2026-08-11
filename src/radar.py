@@ -43,15 +43,30 @@ class RadarSensor:
         in_fov = abs(angle) <= self.half_fov_rad
         return in_fov, dist, x_local, y_local
 
-    def track_lead_vehicle(self, ego_x: float, ego_y: float, ego_orient: float, 
-                           obstacles: list, step: int, lane_corridor_width: float = 2.5) -> Optional[Tuple[float, float, float, object, float]]:
+    def track_lead_vehicle(
+        self, 
+        ego_x: float, 
+        ego_y: float, 
+        ego_orient: float, 
+        obstacles: list, 
+        step: int, 
+        lane_corridor_width: float = 2.5,
+        target_offset: float = 0.0,
+        road_heading: Optional[float] = None
+    ) -> Optional[Tuple[float, float, float, object, float]]:
         """
-        Scans vehicles in Ego's rotated FOV cone and tracks the closest in-path vehicle.
-        
-        Returns: (target_x, target_y, target_velocity, target_obstacle_id, x_local) or None
+        Scans vehicles in Ego's rotated FOV cone and tracks the closest lead vehicle.
+        Uses road_heading (if provided) for lane corridor matching so diagonal vehicle 
+        orientation during lane changes doesn't misclassify target lane vehicles.
         """
         closest_dist = self.range_max
         lead_target = None
+        half_corridor = lane_corridor_width / 2.0
+
+        # Reference orientation for lane projection (use road angle if turning)
+        ref_heading = road_heading if road_heading is not None else ego_orient
+        u_road = np.array([np.cos(ref_heading), np.sin(ref_heading)])
+        n_road = np.array([-np.sin(ref_heading), np.cos(ref_heading)])
 
         for obs in obstacles:
             st = obs.state_at_time(step)
@@ -59,16 +74,29 @@ class RadarSensor:
                 continue
 
             ox, oy = st.position[0], st.position[1]
+            
+            # 1. Sensor FOV Check (Must be visible to physical radar cone)
             in_fov, dist, x_local, y_local = self.is_in_fov(ego_x, ego_y, ego_orient, ox, oy)
+            if not in_fov:
+                continue
 
-            # Filter for vehicles inside FOV cone AND within the current lane corridor
-            if in_fov and abs(y_local) < (lane_corridor_width / 2.0):
-                if dist < closest_dist:
-                    closest_dist = dist
-                    target_v = float(getattr(st, 'velocity', 15.0))
-                    lead_target = (ox, oy, target_v, obs.obstacle_id, x_local)
+            # 2. Road-Aligned Corridor Projection
+            dx, dy = ox - ego_x, oy - ego_y
+            long_road = dx * u_road[0] + dy * u_road[1]
+            lat_road = dx * n_road[0] + dy * n_road[1]
+
+            if long_road > 0.0:  # Vehicle must be ahead along the road
+                in_current_lane = abs(lat_road) <= half_corridor
+                in_target_lane = abs(lat_road - target_offset) <= half_corridor
+
+                if in_current_lane or in_target_lane:
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        target_v = float(getattr(st, 'velocity', 15.0))
+                        lead_target = (ox, oy, target_v, obs.obstacle_id, x_local)
 
         return lead_target
+
 
     def is_adjacent_lane_clear(
         self,
