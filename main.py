@@ -2,6 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
+from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
 from src.lateral_controller import (
     StanleyController,
@@ -70,6 +71,11 @@ print(f" Ego orient is {ego_orient}")
 radar = RadarSensor(range_max=70.0, fov_deg=60.0)
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
+lane_width = get_current_lane_width(
+    scenario, ego_x=ego_params["x"], ego_y=ego_params["y"]
+)
+planner = BehaviorPlanner(scenario_name=SCENARIO_NAME, target_offset=-lane_width)
+target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
 
 # Collision tracking state
 has_collided = False
@@ -77,23 +83,23 @@ collision_step = None
 collided_obstacle_id = None
 frozen_obs_states = {}
 frame_files = []
-lane_width = get_current_lane_width(
-    scenario, ego_x=ego_params["x"], ego_y=ego_params["y"]
-)
-if SCENARIO_NAME == "USA":
-    target_path = generate_lane_change_path(
-            start_x=ego_params["x"],
-            start_y=ego_params["y"],
-            road_heading=ego_params["orientation"],
-            target_lane_offset=lane_width
-            )
-else: 
-    target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
+
 
 # -----------------------------------------------------------------------------
 # 3. Main Simulation Loop
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
+    # State Machine
+    state, target_path = planner.update_plan( scenario, 
+                                             ego_x,
+                                             ego_y,
+                                             ego_orient,
+                                             surrounding_obstacles,
+                                             step,
+                                             radar,
+                                             target_path
+                                             )
+
     # Track lead vehicle via radar perception cone
     lead_target = radar.track_lead_vehicle(
         ego_x, ego_y, ego_orient, surrounding_obstacles, step

@@ -69,3 +69,48 @@ class RadarSensor:
                     lead_target = (ox, oy, target_v, obs.obstacle_id, x_local)
 
         return lead_target
+
+    def is_adjacent_lane_clear(
+        self,
+        ego_x: float,
+        ego_y: float,
+        ego_yaw: float,
+        surrounding_obstacles: list,
+        step: int,
+        target_lane_offset: float,
+        safety_gap_front: float = 12.0,
+        safety_gap_rear: float = 10.0,
+    ) -> bool:
+        """
+        Checks if the target adjacent lane is free of obstacles within a 
+        longitudinal safety corridor around the Ego vehicle.
+        
+        target_lane_offset: Lateral distance to target lane center (+ left, - right)
+        safety_gap_front: Minimum safe distance ahead in target lane (meters)
+        safety_gap_rear: Minimum safe distance behind in target lane (meters)
+        """
+        # Direction vectors in Ego frame
+        u_hat = np.array([np.cos(ego_yaw), np.sin(ego_yaw)])   # Forward
+        n_hat = np.array([-np.sin(ego_yaw), np.cos(ego_yaw)])  # Perpendicular (Left)
+
+        for obs in surrounding_obstacles:
+            st = obs.state_at_time(step)
+            if st is None:
+                continue
+
+            # Vector from Ego to Obstacle
+            dx = st.position[0] - ego_x
+            dy = st.position[1] - ego_y
+
+            # Project into Ego local frame
+            longitudinal_dist = dx * u_hat[0] + dy * u_hat[1]
+            lateral_dist = dx * n_hat[0] + dy * n_hat[1]
+
+            # 1. Check if obstacle is inside or close to the target lane corridor
+            lane_tolerance = 1.8  # ~half a lane width
+            if abs(lateral_dist - target_lane_offset) <= lane_tolerance:
+                # 2. Check if obstacle falls within our longitudinal safety window
+                if -safety_gap_rear <= longitudinal_dist <= safety_gap_front:
+                    return False  # Target lane is blocked!
+
+        return True  # Safe to initiate lane change
