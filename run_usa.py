@@ -147,6 +147,8 @@ for step in range(NUM_STEPS):
 
         is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
         surrounding_render_states.append((obs, obs_corners, is_hit))
+        front_tracked = front_radar.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
+        rear_tracked = rear_radar.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
 
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
@@ -159,6 +161,8 @@ for step in range(NUM_STEPS):
         radar_fov_deg=front_radar.fov_deg,
         rear_radar_range=rear_radar.range_max,
         rear_radar_fov_deg=rear_radar.fov_deg,
+        front_tracked_ids=front_tracked,
+        rear_tracked_ids=rear_tracked,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,

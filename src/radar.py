@@ -168,3 +168,16 @@ class RadarSensor:
                     return False
 
         return True
+
+    def get_detected_obstacle_ids(self, ego_x: float, ego_y: float, ego_orient: float, obstacles: list, step: int) -> set:
+        """Returns a set of obstacle IDs that fall within this radar's FOV at the current step."""
+        detected_ids = set()
+        for obs in obstacles:
+            st = obs.state_at_time(step)
+            if st is None:
+                continue
+            ox, oy = st.position[0], st.position[1]
+            in_fov, _, _, _ = self.is_in_fov(ego_x, ego_y, ego_orient, ox, oy)
+            if in_fov:
+                detected_ids.add(obs.obstacle_id)
+        return detected_ids

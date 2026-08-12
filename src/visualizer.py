@@ -25,11 +25,14 @@ def draw_obstacle_trajectories(ax, obstacles, zorder=50):
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
 
 def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar_range, radar_fov_deg, 
-                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None):
+                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None, front_tracked_ids: set = None, rear_tracked_ids: set = None):
     """
     Renders simulation frame with Radar FOV cone, dynamic CBF safety buffer, 
     optional trajectory prediction paths, and camera tracking centered on Ego.
     """
+
+    front_tracked_ids = front_tracked_ids or set()
+    rear_tracked_ids = rear_tracked_ids or set()
     fig, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
 
@@ -111,11 +114,26 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
 
     # 4. Render Surrounding Vehicles
     for obs, corners, is_hit in surrounding_states:
+        obs_id = obs.obstacle_id
+        in_front = obs_id in front_tracked_ids
+        in_rear = obs_id in rear_tracked_ids
+
         obs_color = "#E67E22" if is_hit else "#1F77B4"
+
+        if in_front:
+            edge_color = "#00E5FF" # Cyan for Front Radar
+            lw = 2.5
+        elif in_rear:
+            edge_color = "#E040FB" # Magenta for Rear Radar
+            lw = 2.5
+        else:
+            edge_color = "black"
+            lw = 1.0
+
         ax.add_patch(patches.Polygon(
             corners, closed=True, 
-            facecolor=obs_color, edgecolor="black", 
-            linewidth=1.0, zorder=100
+            facecolor=obs_color, edgecolor=edge_color, 
+            linewidth=lw, zorder=100
         ))
 
     # 5. Render Ego Vehicle
@@ -132,15 +150,13 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
 
     # 6. Legend & Information
 
-   # ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
-   # ax.plot([], [], color="#0099CC", linestyle="-", label=f"Radar FOV ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
-   # ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
-   # 
     ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
     ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
     
     if rear_radar_range is not None and rear_radar_fov_deg is not None:
         ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
+        ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")
+        ax.plot([], [], color="#E040FB", linestyle="-", linewidth=2.5, label="Rear Tracked Vehicle")
 
     ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
     if show_trajectories:
