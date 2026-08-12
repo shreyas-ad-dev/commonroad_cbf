@@ -11,6 +11,7 @@ from src.lateral_controller import (
 )
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
+from src.ultrasonic import SideUltrasonicSensor
 from src.utils import setup_frames_directory, build_gif_and_cleanup
 from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame
@@ -53,6 +54,8 @@ ego_w = ego_params["width"]
 
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
+uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
+uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right")
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
@@ -149,6 +152,8 @@ for step in range(NUM_STEPS):
         surrounding_render_states.append((obs, obs_corners, is_hit))
         front_tracked = front_radar.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
         rear_tracked = rear_radar.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
+        left_tracked = uss_left.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
+        right_tracked = uss_right.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, surrounding_obstacles, step)
 
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
@@ -163,6 +168,10 @@ for step in range(NUM_STEPS):
         rear_radar_fov_deg=rear_radar.fov_deg,
         front_tracked_ids=front_tracked,
         rear_tracked_ids=rear_tracked,
+        uss_range=uss_left.range_max,
+        uss_fov_deg=uss_left.fov_deg,
+        left_tracked_ids=left_tracked,
+        right_tracked_ids=right_tracked,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,

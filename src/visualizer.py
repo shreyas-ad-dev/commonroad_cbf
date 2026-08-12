@@ -25,7 +25,7 @@ def draw_obstacle_trajectories(ax, obstacles, zorder=50):
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
 
 def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar_range, radar_fov_deg, 
-                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None, front_tracked_ids: set = None, rear_tracked_ids: set = None):
+                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None, front_tracked_ids: set = None, rear_tracked_ids: set = None, uss_range: float = None, uss_fov_deg: float = None, left_tracked_ids: set = None, right_tracked_ids: set = None):
     """
     Renders simulation frame with Radar FOV cone, dynamic CBF safety buffer, 
     optional trajectory prediction paths, and camera tracking centered on Ego.
@@ -33,6 +33,9 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
 
     front_tracked_ids = front_tracked_ids or set()
     rear_tracked_ids = rear_tracked_ids or set()
+    left_tracked_ids = left_tracked_ids or set()
+    right_tracked_ids = right_tracked_ids or set()
+
     fig, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
 
@@ -58,7 +61,7 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     rear_y = ego_y - (ego_l / 2.0) * sin_a
 
 
-    # 2. Render Radar FOV Cone
+    # 2. Render Radar and USS FOV Cone
     front_fov_wedge = patches.Wedge(
         center=(front_x, front_y),
         r=radar_range,
@@ -87,6 +90,33 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
                 zorder=70
         )
         ax.add_patch(rear_fov_wedge)
+
+        if uss_range is not None and uss_fov_deg is not None:
+            # Left USS (+90 deg)
+            left_wedge = patches.Wedge(
+                    center=(ego_x, ego_y), r=uss_range,
+                    theta1=np.degrees(ego_orient) + 90.0 - (uss_fov_deg / 2.0),
+                    theta2=np.degrees(ego_orient) + 90.0 + (uss_fov_deg / 2.0),
+                    facecolor="#FFE082",
+                    alpha=0.60,
+                    edgecolor="#FFA000",
+                    linestyle="--",
+                    zorder=70
+            )
+            ax.add_patch(left_wedge)
+            
+            # Right USS (-90 deg)
+            right_wedge = patches.Wedge(
+                    center=(ego_x, ego_y), r=uss_range,
+                    theta1=np.degrees(ego_orient) - 90.0 - (uss_fov_deg / 2.0),
+                    theta2=np.degrees(ego_orient) - 90.0 + (uss_fov_deg / 2.0),
+                    facecolor="#FFE082",
+                    alpha=0.60,
+                    edgecolor="#FFA000",
+                    linestyle="--",
+                    zorder=70
+            )
+            ax.add_patch(right_wedge)
 
     # 3. Render CBF Safety Buffer Zone
     w2 = ego_w / 2.0
@@ -117,6 +147,7 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
         obs_id = obs.obstacle_id
         in_front = obs_id in front_tracked_ids
         in_rear = obs_id in rear_tracked_ids
+        in_side = (obs_id in left_tracked_ids) or (obs_id in right_tracked_ids)
 
         obs_color = "#E67E22" if is_hit else "#1F77B4"
 
@@ -125,6 +156,9 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
             lw = 2.5
         elif in_rear:
             edge_color = "#E040FB" # Magenta for Rear Radar
+            lw = 2.5
+        elif in_side:
+            edge_color = "#FFB300" # Amber/Gold for SIde USS
             lw = 2.5
         else:
             edge_color = "black"
@@ -151,14 +185,25 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     # 6. Legend & Information
 
     ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
+
+    ax.plot([], [], color=zone_color, linestyle="--", linewidth=1, label=f"CBF Buffer ({d_safe:.1f}m)")
+
     ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
     
     if rear_radar_range is not None and rear_radar_fov_deg is not None:
         ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
+    if uss_range is not None and uss_fov_deg is not None:
+        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_range:.0f}m, {uss_fov_deg:.0f}°)")
+
+    if front_tracked_ids:
         ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")
+
+    if rear_tracked_ids:
         ax.plot([], [], color="#E040FB", linestyle="-", linewidth=2.5, label="Rear Tracked Vehicle")
 
-    ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
+    if left_tracked_ids or right_tracked_ids:
+        ax.plot([], [], color="#FFB300", linestyle="-", linewidth=2.5, label="Side USS Tracked")
+       
     if show_trajectories:
         ax.plot([], [], color="black", linestyle=":", label="Obstacle Trajectory")
 
