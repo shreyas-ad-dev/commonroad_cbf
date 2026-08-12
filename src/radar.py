@@ -1,17 +1,25 @@
+# src/radar.py
 from typing import List, Tuple, Optional
 import numpy as np
+
 
 class RadarSensor:
     """
     Simulates a body-frame aligned Radar sensor with finite range and Field of View (FOV).
+    Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations.
     """
-    def __init__(self, range_max: float = 70.0, fov_deg: float = 60.0):
+    def __init__(self, range_max: float = 70.0, fov_deg: float = 60.0, mount_position: str = "front"):
         """
         :param range_max: Maximum detection range in meters
-        :param fov_deg: Total azimuth field of view in degrees (+/- fov_deg/2 from centerline)
+        :param fov_deg: Total azimuth field of view in degrees (+/- fov_deg/2)
+        :param mount_position: Orientation relative to vehicle heading ('front' or 'rear')
         """
+        if mount_position not in ["front", "rear"]:
+            raise ValueError("mount_position must be either 'front' or 'rear'")
+
         self.range_max = range_max
         self.fov_deg = fov_deg
+        self.mount_position = mount_position
         self.half_fov_rad = np.radians(fov_deg / 2.0)
 
     def to_local_frame(self, ego_x: float, ego_y: float, ego_orient: float, obs_x: float, obs_y: float) -> Tuple[float, float]:
@@ -36,10 +44,19 @@ class RadarSensor:
         x_local, y_local = self.to_local_frame(ego_x, ego_y, ego_orient, obs_x, obs_y)
         dist = np.hypot(x_local, y_local)
 
-        if dist > self.range_max or x_local <= 0.0:
+        if dist > self.range_max:
             return False, dist, x_local, y_local
 
-        angle = np.arctan2(y_local, x_local)
+        # Longitudinal direction constraint based on mounting point
+        if self.mount_position == "front" and x_local <= 0.0:
+            return False, dist, x_local, y_local
+        elif self.mount_position == "rear" and x_local >= 0.0:
+            return False, dist, x_local, y_local
+
+        # Measure relative azimuth angle from sensor bore-axis
+        sensor_x = x_local if self.mount_position == "front" else -x_local
+        angle = np.arctan2(y_local, sensor_x)
+
         in_fov = abs(angle) <= self.half_fov_rad
         return in_fov, dist, x_local, y_local
 
@@ -60,6 +77,9 @@ class RadarSensor:
         Uses road_heading (if provided) for lane corridor matching so diagonal vehicle 
         orientation during lane changes doesn't misclassify target lane vehicles.
         """
+        if self.mount_position != "front":
+            return None
+
         closest_dist = self.range_max
         lead_target = None
         half_corridor = lane_corridor_width / 2.0
@@ -76,7 +96,7 @@ class RadarSensor:
 
             ox, oy = st.position[0], st.position[1]
             
-            # 1. Sensor FOV Check (Must be visible to physical radar cone)
+            # 1. Sensor FOV Check
             in_fov, dist, x_local, y_local = self.is_in_fov(ego_x, ego_y, ego_orient, ox, oy)
             if not in_fov:
                 continue
@@ -98,7 +118,6 @@ class RadarSensor:
 
         return lead_target
 
-
     def is_adjacent_lane_clear(
         self,
         ego_x: float,
@@ -109,18 +128,14 @@ class RadarSensor:
         target_lane_offset: float,
         safety_gap_front: float = 12.0,
         safety_gap_rear: float = 10.0,
-        road_heading: Optional[float] = None
+        road_heading: Optional[float] = None,
+        rear_radar: Optional["RadarSensor"] = None
     ) -> bool:
         """
         Checks if the target adjacent lane is free of obstacles within a 
-        longitudinal safety corridor around the Ego vehicle.
-        
-        target_lane_offset: Lateral distance to target lane center (+ left, - right)
-        safety_gap_front: Minimum safe distance ahead in target lane (meters)
-        safety_gap_rear: Minimum safe distance behind in target lane (meters)
+        longitudinal safety corridor around the Ego vehicle using front and rear radars.
         """
         ref_heading = road_heading if road_heading is not None else ego_yaw
-        # Direction vectors in Ego frame
         u_hat = np.array([np.cos(ref_heading), np.sin(ref_heading)])   # Forward
         n_hat = np.array([-np.sin(ref_heading), np.cos(ref_heading)])  # Perpendicular (Left)
 
@@ -129,23 +144,27 @@ class RadarSensor:
             if st is None:
                 continue
 
-            ox,oy = st.position[0], st.position[1]
-            in_fov, _, _, _ = self.is_in_fov(ego_x, ego_y, ego_yaw, ox, oy)
-            if not in_fov:
+            ox, oy = st.position[0], st.position[1]
+
+            # Obstacle must be detected by either front OR rear radar
+            in_front_fov, _, _, _ = self.is_in_fov(ego_x, ego_y, ego_yaw, ox, oy)
+            in_rear_fov = False
+            if rear_radar is not None:
+                in_rear_fov, _, _, _ = rear_radar.is_in_fov(ego_x, ego_y, ego_yaw, ox, oy)
+
+            if not (in_front_fov or in_rear_fov):
                 continue
 
-            # Vector from Ego to Obstacle
-            dx,dy  = ox - ego_x, oy - ego_y
-            
-            # Project into Ego local frame
+            # Vector from Ego to Obstacle projected into Ego frame
+            dx, dy = ox - ego_x, oy - ego_y
             longitudinal_dist = dx * u_hat[0] + dy * u_hat[1]
             lateral_dist = dx * n_hat[0] + dy * n_hat[1]
 
-            # 1. Check if obstacle is inside or close to the target lane corridor
-            lane_tolerance = 1.8  # ~half a lane width
+            # 1. Check if obstacle is inside or close to target lane
+            lane_tolerance = 1.8
             if abs(lateral_dist - target_lane_offset) <= lane_tolerance:
-                # 2. Check if obstacle falls within our longitudinal safety window
+                # 2. Check if obstacle falls within longitudinal safety window
                 if -safety_gap_rear <= longitudinal_dist <= safety_gap_front:
-                    return False  # Target lane is blocked!
+                    return False
 
-        return True  # Safe to initiate lane change
+        return True

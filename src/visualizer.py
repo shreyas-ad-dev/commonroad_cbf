@@ -25,7 +25,7 @@ def draw_obstacle_trajectories(ax, obstacles, zorder=50):
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
 
 def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar_range, radar_fov_deg, 
-                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False):
+                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None):
     """
     Renders simulation frame with Radar FOV cone, dynamic CBF safety buffer, 
     optional trajectory prediction paths, and camera tracking centered on Ego.
@@ -51,9 +51,12 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
     front_x = ego_x + (ego_l / 2.0) * cos_a
     front_y = ego_y + (ego_l / 2.0) * sin_a
+    rear_x = ego_x - (ego_l / 2.0) * cos_a
+    rear_y = ego_y - (ego_l / 2.0) * sin_a
+
 
     # 2. Render Radar FOV Cone
-    fov_wedge = patches.Wedge(
+    front_fov_wedge = patches.Wedge(
         center=(front_x, front_y),
         r=radar_range,
         theta1=np.degrees(ego_orient) - (radar_fov_deg / 2.0),
@@ -65,7 +68,22 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
         linewidth=1.0,
         zorder=70
     )
-    ax.add_patch(fov_wedge)
+    ax.add_patch(front_fov_wedge)
+
+    if rear_radar_range is not None and rear_radar_fov_deg is not None:
+        rear_fov_wedge = patches.Wedge(
+                center=(rear_x, rear_y),
+                r=rear_radar_range,
+                theta1=np.degrees(ego_orient) + 180.0 - (rear_radar_fov_deg/ 2.0),
+                theta2=np.degrees(ego_orient) + 180.0 + (rear_radar_fov_deg/ 2.0),
+                facecolor="#AB47BC",
+                alpha=0.22,
+                edgecolor="#7B1FA2",
+                linestyle="-",
+                linewidth=1.0,
+                zorder=70
+        )
+        ax.add_patch(rear_fov_wedge)
 
     # 3. Render CBF Safety Buffer Zone
     w2 = ego_w / 2.0
@@ -113,10 +131,18 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     ))
 
     # 6. Legend & Information
+
+   # ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
+   # ax.plot([], [], color="#0099CC", linestyle="-", label=f"Radar FOV ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
+   # ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
+   # 
     ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
-    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Radar FOV ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
-    ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
+    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
     
+    if rear_radar_range is not None and rear_radar_fov_deg is not None:
+        ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
+
+    ax.plot([], [], color=zone_color, linestyle="--", linewidth=2, label=f"CBF Buffer ({d_safe:.1f}m)")
     if show_trajectories:
         ax.plot([], [], color="black", linestyle=":", label="Obstacle Trajectory")
 

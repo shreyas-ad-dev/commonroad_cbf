@@ -51,7 +51,8 @@ ego_v = ego_params["velocity"]
 ego_l = ego_params["length"]
 ego_w = ego_params["width"]
 
-radar = RadarSensor(range_max=70.0, fov_deg=60.0)
+front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
+rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
@@ -79,12 +80,13 @@ for step in range(NUM_STEPS):
         ego_orient=ego_orient,
         surrounding_obstacles=surrounding_obstacles,
         step=step,
-        radar=radar,
+        radar=front_radar,
+        rear_radar=rear_radar,
         current_path=target_path
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
-    lead_target = radar.track_lead_vehicle(
+    lead_target = front_radar.track_lead_vehicle(
         ego_x, ego_y, ego_orient, surrounding_obstacles, step,
         target_offset=planner.target_offset,
         road_heading=ego_params["orientation"]
@@ -152,8 +154,10 @@ for step in range(NUM_STEPS):
         ego_state=(ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w),
         d_safe=d_safe,
         h_val=h_val,
-        radar_range=radar.range_max,
-        radar_fov_deg=radar.fov_deg,
+        radar_range=front_radar.range_max,
+        radar_fov_deg=front_radar.fov_deg,
+        rear_radar_range=rear_radar.range_max,
+        rear_radar_fov_deg=rear_radar.fov_deg,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,
