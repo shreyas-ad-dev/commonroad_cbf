@@ -1,8 +1,8 @@
 # src/utils.py
 from pathlib import Path
 from typing import List
-from src.visualizer import create_gif_from_frames
-
+#from src.visualizer import create_gif_from_frames
+from PIL import Image
 
 def setup_frames_directory(frames_dir: Path) -> None:
     """Cleans up existing PNG frames in the directory and creates a fresh folder."""
@@ -11,6 +11,16 @@ def setup_frames_directory(frames_dir: Path) -> None:
             f.unlink()
     frames_dir.mkdir(exist_ok=True)
 
+def create_gif_from_frames(frame_files, output_gif_path, dt):
+    """Stitches saved frame PNGs into an animated GIF."""
+    images = [Image.open(f).copy() for f in frame_files]
+    images[0].save(
+        output_gif_path,
+        save_all=True,
+        append_images=images[1:],
+        duration=int(dt * 1000),
+        loop=0
+    )
 
 def build_gif_and_cleanup(frame_files: List[Path], gif_path: Path, dt: float) -> None:
     """
@@ -34,3 +44,5 @@ def build_gif_and_cleanup(frame_files: List[Path], gif_path: Path, dt: float) ->
         frames_dir.rmdir()
 
     print(f" Output saved to: '{gif_path.name}'")
+
+

@@ -1,10 +1,11 @@
 from pathlib import Path
-from src.vehicle_dynamics import get_car_polygon
+#from src.vehicle_dynamics import get_car_polygon
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from PIL import Image
+#from PIL import Image
 from commonroad.visualization.mp_renderer import MPRenderer
+from src.ego_state import EgoState
 
 def draw_obstacle_trajectories(ax, obstacles, zorder=50):
     """Draws predicted dotted trajectory paths for surrounding traffic."""
@@ -24,8 +25,29 @@ def draw_obstacle_trajectories(ax, obstacles, zorder=50):
             path = np.array(positions)
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
 
-def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar_range, radar_fov_deg, 
-                 surrounding_states, has_collided, step, num_steps, frame_path, show_trajectories: bool = False, rear_radar_range: float = None, rear_radar_fov_deg: float = None, front_tracked_ids: set = None, rear_tracked_ids: set = None, uss_range: float = None, uss_fov_deg: float = None, left_tracked_ids: set = None, right_tracked_ids: set = None):
+def render_frame(
+        scenario,
+        planning_problem_set,
+        ego: EgoState,
+        d_safe,
+        h_val,
+        radar_range,
+        radar_fov_deg, 
+        surrounding_states,
+        has_collided,
+        step,
+        num_steps,
+        frame_path,
+        show_trajectories: bool = False,
+        rear_radar_range: float = None,
+        rear_radar_fov_deg: float = None,
+        front_tracked_ids: set = None,
+        rear_tracked_ids: set = None,
+        uss_range: float = None,
+        uss_fov_deg: float = None,
+        left_tracked_ids: set = None,
+        right_tracked_ids: set = None
+        ):
     """
     Renders simulation frame with Radar FOV cone, dynamic CBF safety buffer, 
     optional trajectory prediction paths, and camera tracking centered on Ego.
@@ -53,20 +75,24 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     if show_trajectories:
         draw_obstacle_trajectories(ax, [obs for obs, _, _ in surrounding_states], zorder=50)
 
-    ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w = ego_state
-    cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
-    front_x = ego_x + (ego_l / 2.0) * cos_a
-    front_y = ego_y + (ego_l / 2.0) * sin_a
-    rear_x = ego_x - (ego_l / 2.0) * cos_a
-    rear_y = ego_y - (ego_l / 2.0) * sin_a
+    #ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w = ego_state
+    #cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
+    #front_x = ego_x + (ego_l / 2.0) * cos_a
+    #front_y = ego_y + (ego_l / 2.0) * sin_a
+    #rear_x = ego_x - (ego_l / 2.0) * cos_a
+    #rear_y = ego_y - (ego_l / 2.0) * sin_a
+
+    front_pos = ego.position + (ego.length / 2.0) * ego.heading_vector
+    rear_pos = ego.position - (ego.length / 2.0) * ego. heading_vector
+    heading_deg = np.degrees(ego.orientation)
 
 
     # 2. Render Radar and USS FOV Cone
     front_fov_wedge = patches.Wedge(
-        center=(front_x, front_y),
+        center=front_pos,
         r=radar_range,
-        theta1=np.degrees(ego_orient) - (radar_fov_deg / 2.0),
-        theta2=np.degrees(ego_orient) + (radar_fov_deg / 2.0),
+        theta1=heading_deg - (radar_fov_deg / 2.0),
+        theta2=heading_deg + (radar_fov_deg / 2.0),
         facecolor="#00E5FF",
         alpha=0.22,
         edgecolor="#0099CC",
@@ -78,10 +104,10 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
 
     if rear_radar_range is not None and rear_radar_fov_deg is not None:
         rear_fov_wedge = patches.Wedge(
-                center=(rear_x, rear_y),
+                center=rear_pos,
                 r=rear_radar_range,
-                theta1=np.degrees(ego_orient) + 180.0 - (rear_radar_fov_deg/ 2.0),
-                theta2=np.degrees(ego_orient) + 180.0 + (rear_radar_fov_deg/ 2.0),
+                theta1=heading_deg + 180.0 - (rear_radar_fov_deg/ 2.0),
+                theta2=heading_deg + 180.0 + (rear_radar_fov_deg/ 2.0),
                 facecolor="#AB47BC",
                 alpha=0.22,
                 edgecolor="#7B1FA2",
@@ -91,43 +117,46 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
         )
         ax.add_patch(rear_fov_wedge)
 
-        if uss_range is not None and uss_fov_deg is not None:
-            # Left USS (+90 deg)
-            left_wedge = patches.Wedge(
-                    center=(ego_x, ego_y), r=uss_range,
-                    theta1=np.degrees(ego_orient) + 90.0 - (uss_fov_deg / 2.0),
-                    theta2=np.degrees(ego_orient) + 90.0 + (uss_fov_deg / 2.0),
-                    facecolor="#FFE082",
-                    alpha=0.60,
-                    edgecolor="#FFA000",
-                    linestyle="--",
-                    zorder=70
-            )
-            ax.add_patch(left_wedge)
+    if uss_range is not None and uss_fov_deg is not None:
+        # Left USS (+90 deg)
+        left_wedge = patches.Wedge(
+                center=ego.position,
+                r=uss_range,
+                theta1=heading_deg + 90.0 - (uss_fov_deg / 2.0),
+                theta2=heading_deg + 90.0 + (uss_fov_deg / 2.0),
+                facecolor="#FFE082",
+                alpha=0.60,
+                edgecolor="#FFA000",
+                linestyle="--",
+                zorder=70
+        )
+        ax.add_patch(left_wedge)
             
-            # Right USS (-90 deg)
-            right_wedge = patches.Wedge(
-                    center=(ego_x, ego_y), r=uss_range,
-                    theta1=np.degrees(ego_orient) - 90.0 - (uss_fov_deg / 2.0),
-                    theta2=np.degrees(ego_orient) - 90.0 + (uss_fov_deg / 2.0),
-                    facecolor="#FFE082",
-                    alpha=0.60,
-                    edgecolor="#FFA000",
-                    linestyle="--",
-                    zorder=70
-            )
-            ax.add_patch(right_wedge)
+        # Right USS (-90 deg)
+        right_wedge = patches.Wedge(
+                center=ego.position,
+                r=uss_range,
+                theta1=heading_deg - 90.0 - (uss_fov_deg / 2.0),
+                theta2=heading_deg - 90.0 + (uss_fov_deg / 2.0),
+                facecolor="#FFE082",
+                alpha=0.60,
+                edgecolor="#FFA000",
+                linestyle="--",
+                zorder=70
+        )
+        ax.add_patch(right_wedge)
 
     # 3. Render CBF Safety Buffer Zone
-    w2 = ego_w / 2.0
+    w2 = ego.width / 2.0
     local_buffer = np.array([
         [0.0, -w2],
         [d_safe, -w2],
         [d_safe, w2],
         [0.0, w2]
     ])
-    rot_mat = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-    world_buffer = local_buffer @ rot_mat.T + np.array([front_x, front_y])
+    world_buffer = front_pos + np.outer(local_buffer[:,0], ego.heading_vector) + np.outer(local_buffer[:,1], ego.normal_vector)
+    #rot_mat = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    #world_buffer = local_buffer @ rot_mat.T + np.array([front_x, front_y])
 
     if h_val is None or h_val > 5.0:
         zone_color, zone_alpha = "#2ECC71", 0.25
@@ -171,11 +200,11 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
         ))
 
     # 5. Render Ego Vehicle
-    _, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
+    #_, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     
     ego_color = "#FF0000" if has_collided else "#00FF00"
     ax.add_patch(patches.Polygon(
-        ego_corners, closed=True,
+        ego.corners, closed=True,
         facecolor=ego_color,
         edgecolor="yellow" if has_collided else "black",
         linewidth=2.0 if has_collided else 1.2,
@@ -215,12 +244,12 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
 
     # 7. Camera Frame Tracking
     view_margin = 45.0
-    ax.set_xlim(ego_x - view_margin, ego_x + view_margin)
-    ax.set_ylim(ego_y - view_margin, ego_y + view_margin)
+    ax.set_xlim(ego.x - view_margin, ego.x + view_margin)
+    ax.set_ylim(ego.y - view_margin, ego.y + view_margin)
     ax.set_aspect('equal')
 
     h_str = f" | h(x)={h_val:.2f}" if h_val is not None else " | h(x)=N/A"
-    title_text = f"{scenario.scenario_id} | Step {step}/{num_steps} (t={step * scenario.dt:.1f}s) | v={ego_v:.1f} m/s{h_str}"
+    title_text = f"{scenario.scenario_id} | Step {step}/{num_steps} (t={step * scenario.dt:.1f}s) | v={ego.velocity:.1f} m/s{h_str}"
     if has_collided:
         title_text += " ⚠️ COLLISION FROZEN!"
     
@@ -230,13 +259,3 @@ def render_frame(scenario, planning_problem_set, ego_state, d_safe, h_val, radar
     plt.savefig(frame_path, dpi=100, bbox_inches='tight')
     plt.close('all')
 
-def create_gif_from_frames(frame_files, output_gif_path, dt):
-    """Stitches saved frame PNGs into an animated GIF."""
-    images = [Image.open(f).copy() for f in frame_files]
-    images[0].save(
-        output_gif_path,
-        save_all=True,
-        append_images=images[1:],
-        duration=int(dt * 1000),
-        loop=0
-    )

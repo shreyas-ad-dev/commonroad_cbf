@@ -1,6 +1,7 @@
 # src/ultrasonic.py
 import numpy as np
 from typing import Tuple, Optional, Set
+from src.ego_state import EgoState
 
 class SideUltrasonicSensor:
     """
@@ -15,14 +16,17 @@ class SideUltrasonicSensor:
         self.side = side
         self.half_fov_rad = np.radians(fov_deg / 2.0)
 
-    def is_in_fov(self, ego_x: float, ego_y: float, ego_orient: float, obs_x: float, obs_y: float) -> Tuple[bool, float]:
-        dx = obs_x - ego_x
-        dy = obs_y - ego_y
-        cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
+    def is_in_fov(self, ego: EgoState, obs_x: float, obs_y: float) -> tuple[bool, float]:
+       # dx = obs_x - ego.x
+       # dy = obs_y - ego.y
+       # cos_a, sin_a = np.cos(ego.orientation), np.sin(ego.orientation)
+        d_vec = np.array([obs_x, obs_y]) - ego.position
+        x_local = np.dot(d_vec, ego.heading_vector)
+        y_local = np.dot(d_vec, ego.normal_vector)
 
-        x_local = dx * cos_a + dy * sin_a
-        y_local = -dx * sin_a + dy * cos_a
-        dist = np.hypot(x_local, y_local)
+        #x_local = dx * cos_a + dy * sin_a
+        #y_local = -dx * sin_a + dy * cos_a
+        dist = float(np.hypot(x_local, y_local))
 
         if dist > self.range_max:
             return False, dist
@@ -39,7 +43,7 @@ class SideUltrasonicSensor:
 
         return abs(angle) <= self.half_fov_rad, dist
 
-    def get_detected_obstacle_ids(self, ego_x: float, ego_y: float, ego_orient: float, obstacles: list, step: int) -> Set:
+    def get_detected_obstacle_ids(self, ego: EgoState, obstacles: list, step: int) -> Set:
         """Returns a set of obstacle IDs currently inside this sensor's blind-spot FOV."""
         detected_ids = set()
         for obs in obstacles:
@@ -47,12 +51,12 @@ class SideUltrasonicSensor:
             if st is None:
                 continue
             ox, oy = st.position[0], st.position[1]
-            in_fov, _ = self.is_in_fov(ego_x, ego_y, ego_orient, ox, oy)
+            in_fov, _ = self.is_in_fov(ego, ox, oy)
             if in_fov:
                 detected_ids.add(obs.obstacle_id)
         return detected_ids
 
-    def is_adjacent_lane_clear(self, ego_x: float, ego_y: float, ego_orient: float, obstacles: list, step: int, target_offset: float) -> bool:
+    def is_adjacent_lane_clear(self, ego: EgoState, obstacles: list, step: int, target_offset: float) -> bool:
         """
             Checks if the adjacent lane in the target direction is free of blind-spot obstacles.
         
@@ -65,7 +69,7 @@ class SideUltrasonicSensor:
             return True
 
         # Query tracked obstacle IDs in USS field of view
-        detected_ids = self.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, obstacles, step)
+        detected_ids = self.get_detected_obstacle_ids(ego, obstacles, step)
         
         # Lane is clear only if zero obstacles occupy the side blind spot
         return len(detected_ids) == 0

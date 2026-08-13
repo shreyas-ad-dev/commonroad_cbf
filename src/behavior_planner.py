@@ -52,7 +52,7 @@ class BehaviorPlanner:
                 self.target_offset,
                 safety_gap_front=15.0,
                 safety_gap_rear=18.0,
-                road_heading=ego.orient,
+                road_heading=ego.orientation,
                 rear_radar=rear_radar
         )
 
@@ -68,11 +68,10 @@ class BehaviorPlanner:
 
         if is_clear:
             self.state = "LANE_CHANGE"
-            print(f"[Step {step} | Dist: {distance_traveled:.1f}m] Gap clear! Initiating dynamic lane change.")
+            print(f" [Step {step} | Dist: {distance_traveled:.1f}m] Gap clear! Initiating dynamic lane change.")
             new_path = generate_lane_change_path(
-                start_x=ego.x,
-                start_y=ego.y,
-                road_heading=ego.orient,
+                start_pos=ego.position,
+                road_heading=ego.orientation,
                 target_lane_offset=self.target_offset,
                 total_length=120.0
             )

@@ -136,7 +136,7 @@ class RadarSensor:
                 in_current_lane = abs(lat_road) <= half_corridor
                 #in_target_lane = is_changing_lane and abs(lat_road - target_offset) <= half_corridor
                 # Consider target lane vehicles if ego is changing lanes OR if a target offset is defined
-                in_target_lane = (is_changing_lane or abs(target_offset) > 0.0) and (abs(lat_road - target_offset) <= half_corridor)
+                in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
 
                 if in_current_lane or in_target_lane:
                     if dist < closest_dist:
