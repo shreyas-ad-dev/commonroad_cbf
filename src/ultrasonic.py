@@ -51,3 +51,21 @@ class SideUltrasonicSensor:
             if in_fov:
                 detected_ids.add(obs.obstacle_id)
         return detected_ids
+
+    def is_adjacent_lane_clear(self, ego_x: float, ego_y: float, ego_orient: float, obstacles: list, step: int, target_offset: float) -> bool:
+        """
+            Checks if the adjacent lane in the target direction is free of blind-spot obstacles.
+        
+            target_offset > 0: Left Lane Change
+            target_offset < 0: Right Lane Change
+        """
+        # Ignore check if target offset direction does not match sensor mounting side
+
+        if (target_offset > 0 and self.side != "left") or (target_offset < 0 and self.side != "right"):
+            return True
+
+        # Query tracked obstacle IDs in USS field of view
+        detected_ids = self.get_detected_obstacle_ids(ego_x, ego_y, ego_orient, obstacles, step)
+        
+        # Lane is clear only if zero obstacles occupy the side blind spot
+        return len(detected_ids) == 0

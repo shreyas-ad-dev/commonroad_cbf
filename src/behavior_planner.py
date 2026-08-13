@@ -15,7 +15,8 @@ class BehaviorPlanner:
         self.start_x = None
         self.start_y = None
 
-    def update_plan(self, scenario, ego_x, ego_y, ego_orient, surrounding_obstacles, step, radar, current_path, rear_radar=None):
+    def update_plan(self, scenario, ego_x, ego_y, ego_orient, surrounding_obstacles, step, radar, current_path, rear_radar=None, uss_left=None, uss_right=None):
+
         if self.start_x is None or self.start_y is None:
             self.start_x = ego_x
             self.start_y = ego_y
@@ -32,11 +33,18 @@ class BehaviorPlanner:
             return self.state, current_path
 
         # Dual radar clearance check
-        is_clear = radar.is_adjacent_lane_clear(
+        radar_clear = radar.is_adjacent_lane_clear(
             ego_x, ego_y, ego_orient, surrounding_obstacles, step, 
             self.target_offset, safety_gap_front=15.0, safety_gap_rear=18.0, 
             road_heading=ego_orient, rear_radar=rear_radar
         )
+
+        active_uss = uss_left if self.target_offset > 0 else uss_right
+        uss_clear = active_uss.is_adjacent_lane_clear(
+                ego_x, ego_y, ego_orient, surrounding_obstacles, step, self.target_offset
+        ) if active_uss is not None else True
+
+        is_clear = radar_clear and uss_clear
 
         if is_clear:
             self.state = "LANE_CHANGE"
