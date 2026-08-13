@@ -1,7 +1,7 @@
 # src/ultrasonic.py
 import numpy as np
 from typing import Tuple, Optional, Set
-from src.ego_state import EgoState
+from src.ego_state import EgoState, get_car_polygon
 
 class SideUltrasonicSensor:
     """
@@ -16,32 +16,78 @@ class SideUltrasonicSensor:
         self.side = side
         self.half_fov_rad = np.radians(fov_deg / 2.0)
 
-    def is_in_fov(self, ego: EgoState, obs_x: float, obs_y: float) -> tuple[bool, float]:
-       # dx = obs_x - ego.x
-       # dy = obs_y - ego.y
-       # cos_a, sin_a = np.cos(ego.orientation), np.sin(ego.orientation)
-        d_vec = np.array([obs_x, obs_y]) - ego.position
-        x_local = np.dot(d_vec, ego.heading_vector)
-        y_local = np.dot(d_vec, ego.normal_vector)
+    def is_in_fov(self, ego: EgoState, obstacle: object, step: int ) -> tuple[bool, float]:
+        st = obstacle.state_at_time(step)
+        if st is None:
+            return False, float('inf')
 
-        #x_local = dx * cos_a + dy * sin_a
-        #y_local = -dx * sin_a + dy * cos_a
-        dist = float(np.hypot(x_local, y_local))
+#        if target_offset != 0.0:
+#            d_center = st.position - ego.position
+#            y_center_local = np.dot(d_center, ego.normal_vector)
+#            if abs(y_center_local - target_offset) > lane_tolerance:
+#                return False, float('inf')
 
-        if dist > self.range_max:
-            return False, dist
+        # Extract length and width of the obstacle
+        l = getattr(obstacle.obstacle_shape, "length", 4.5)
+        w = getattr(obstacle.obstacle_shape, "width", 2.0)
+        ox, oy = st.position[0], st.position[1]
+        o_orient = getattr(st, "orientation", 0.0)
 
-        # Left sensor expects y_local > 0; Right sensor expects y_local < 0
-        if self.side == "left" and y_local <= 0.0:
-            return False, dist
-        if self.side == "right" and y_local >= 0.0:
-            return False, dist
+        # Get the 4 corner points of the obstacle vehicle
+        _, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
 
-        # Measure relative angle from side bore-axis
-        sensor_y = y_local if self.side == "left" else -y_local
-        angle = np.arctan2(x_local, sensor_y)
+        min_dist = float('inf')
+        any_corner_in_fov = False
 
-        return abs(angle) <= self.half_fov_rad, dist
+        # Check center + all 4 corners
+        points_to_check = [st.position] + list(obs_corners)
+
+        for pt in points_to_check:
+            d_vec = pt - ego.position
+            x_local = np.dot(d_vec, ego.heading_vector)
+            y_local = np.dot(d_vec, ego.normal_vector)
+            dist = float(np.hypot(x_local, y_local))
+
+            if dist < min_dist:
+                min_dist = dist
+
+            if dist <= self.range_max:
+                # Side check
+                if (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0):
+                    sensor_y = y_local if self.side == "left" else -y_local
+                    angle = np.arctan2(x_local, sensor_y)
+                    if abs(angle) <= self.half_fov_rad:
+                        #if target_offset == 0.0 or abs(y_local - target_offset) <= (lane_tolerance + w /2.0):
+                        any_corner_in_fov = True
+
+        return any_corner_in_fov, min_dist
+#
+#    def is_in_fov(self, ego: EgoState, obs_x: float, obs_y: float) -> tuple[bool, float]:
+#       # dx = obs_x - ego.x
+#       # dy = obs_y - ego.y
+#       # cos_a, sin_a = np.cos(ego.orientation), np.sin(ego.orientation)
+#        d_vec = np.array([obs_x, obs_y]) - ego.position
+#        x_local = np.dot(d_vec, ego.heading_vector)
+#        y_local = np.dot(d_vec, ego.normal_vector)
+#
+#        #x_local = dx * cos_a + dy * sin_a
+#        #y_local = -dx * sin_a + dy * cos_a
+#        dist = float(np.hypot(x_local, y_local))
+#
+#        if dist > self.range_max:
+#            return False, dist
+#
+#        # Left sensor expects y_local > 0; Right sensor expects y_local < 0
+#        if self.side == "left" and y_local <= 0.0:
+#            return False, dist
+#        if self.side == "right" and y_local >= 0.0:
+#            return False, dist
+#
+#        # Measure relative angle from side bore-axis
+#        sensor_y = y_local if self.side == "left" else -y_local
+#        angle = np.arctan2(x_local, sensor_y)
+#
+#        return abs(angle) <= self.half_fov_rad, dist
 
     def get_detected_obstacle_ids(self, ego: EgoState, obstacles: list, step: int) -> Set:
         """Returns a set of obstacle IDs currently inside this sensor's blind-spot FOV."""
@@ -51,7 +97,7 @@ class SideUltrasonicSensor:
             if st is None:
                 continue
             ox, oy = st.position[0], st.position[1]
-            in_fov, _ = self.is_in_fov(ego, ox, oy)
+            in_fov, _ = self.is_in_fov(ego, obs, step)
             if in_fov:
                 detected_ids.add(obs.obstacle_id)
         return detected_ids

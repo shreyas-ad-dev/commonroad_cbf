@@ -67,8 +67,8 @@ print(f" Ego Initial Position: ({ego.x:.2f}, {ego.y:.2f})")
 #
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
-uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
-uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right")
+uss_left = SideUltrasonicSensor(range_max=5.0, fov_deg=100.0, side="left")
+uss_right = SideUltrasonicSensor(range_max=5.0, fov_deg=100.0, side="right")
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0, wheelbase=ego.wheelbase)
 
