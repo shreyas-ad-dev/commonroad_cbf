@@ -10,9 +10,12 @@ except ImportError:
 
 class CBFQPSolver:
     """
-    Control Barrier Function Quadratic Program (CBF-QP) Solver
-    for relative longitudinal safety maintenance along any lane orientation.
+    Control Barrier Function Quadratic Program (CBF-QP) Solver.
+    
+    Maintains relative longitudinal safety along any lane orientation by solving 
+    for safe acceleration commands that satisfy barrier function constraints.
     """
+    
     def __init__(self, 
                  gamma: float = 1.2, 
                  d_min: float = 6.0, 
@@ -21,13 +24,17 @@ class CBFQPSolver:
                  a_max: float = 2.0,
                  use_cvxpy: bool = False):
         """
-        :param gamma: CBF class-K gain (higher = more aggressive braking near boundary)
-        :param d_min: Minimum hard distance buffer (meters)
-        :param tau: Time headway buffer factor (seconds)
-        :param a_min: Minimum acceleration / max braking (m/s^2)
-        :param a_max: Maximum acceleration (m/s^2)
-        :param use_cvxpy: Toggle CVXPY optimization solver vs analytical closed-form solution
+        Initializes the CBFQPSolver instance.
+
+        Args:
+            gamma (float): CBF class-K gain (higher values yield more aggressive braking near boundaries).
+            d_min (float): Minimum hard distance buffer in meters.
+            tau (float): Time headway buffer factor in seconds.
+            a_min (float): Minimum acceleration / maximum braking limit in m/s^2.
+            a_max (float): Maximum acceleration limit in m/s^2.
+            use_cvxpy (bool): Toggles CVXPY optimization solver vs analytical closed-form solution.
         """
+        
         self.gamma = gamma
         self.d_min = d_min
         self.tau = tau
@@ -37,9 +44,16 @@ class CBFQPSolver:
 
     def compute_barrier(self, longitudinal_dist: float, v_ego: float) -> float:
         """
-        Computes CBF barrier value h(x) based on relative longitudinal distance.
-        h(x) >= 0 implies safe state.
+        Computes the CBF barrier value h(x) based on relative longitudinal distance.
+
+        Args:
+            longitudinal_dist (float): Relative distance to target vehicle in Ego's local longitudinal frame.
+            v_ego (float): Current speed of the Ego vehicle in m/s.
+
+        Returns:
+            float: Value of the safety barrier h(x). Values >= 0 indicate a safe state.
         """
+        
         d_safe = self.d_min + (v_ego * self.tau)
         return longitudinal_dist - d_safe
 
@@ -50,15 +64,19 @@ class CBFQPSolver:
               v_des: float, 
               dt: float) -> float:
         """
-        Solves CBF-QP acceleration command (u) to enforce h(x) >= 0.
-        
-        :param longitudinal_dist: Relative distance in Ego's local longitudinal frame (x_local)
-        :param v_ego: Current Ego speed (m/s)
-        :param v_target: Target vehicle speed (m/s)
-        :param v_des: Desired cruising speed (m/s)
-        :param dt: Time step delta (seconds)
-        :return: Optimal safe acceleration command (m/s^2)
+        Solves for the optimal safe acceleration command (u) enforcing h(x) >= 0.
+
+        Args:
+            longitudinal_dist (float): Relative distance in Ego's local longitudinal frame (x_local).
+            v_ego (float): Current speed of the Ego vehicle in m/s.
+            v_target (float): Current speed of the target vehicle in m/s.
+            v_des (float): Desired cruising speed of the Ego vehicle in m/s.
+            dt (float): Simulation time step delta in seconds.
+
+        Returns:
+            float: Optimal safe acceleration command in m/s^2.
         """
+
         h_val = self.compute_barrier(longitudinal_dist, v_ego)
         u_nom = 0.5 * (v_des - v_ego)
 
@@ -67,12 +85,27 @@ class CBFQPSolver:
         else:
             return self._solve_analytical(h_val, v_ego, v_target, u_nom)
 
-    def _solve_analytical(self, h_val: float, v_ego: float, v_target: float, u_nom: float) -> float:
+    def _solve_analytical(self,
+                          h_val: float,
+                          v_ego: float,
+                          v_target: float,
+                          u_nom: float) -> float:
         """
-        Analytical solution to scalar CBF-QP:
-        h_dot = v_rel - u * tau >= -gamma * h
-        => u * tau <= v_rel + gamma * h
+        Computes the closed-form analytical solution to the scalar CBF-QP.
+
+        Enforces h_dot = v_rel - u * tau >= -gamma * h, which simplifies to:
+        u * tau <= v_rel + gamma * h.
+
+        Args:
+            h_val (float): Current evaluation of the barrier function h(x).
+            v_ego (float): Current speed of the Ego vehicle in m/s.
+            v_target (float): Speed of the target lead vehicle in m/s.
+            u_nom (float): Nominal unconstrained acceleration input.
+
+        Returns:
+            float: Safe acceleration control bounded by physical limits [a_min, a_max].
         """
+
         v_rel = v_target - v_ego
         
         if self.tau > 0.0:
@@ -83,8 +116,27 @@ class CBFQPSolver:
         u_cbf = min(u_nom, max_allowed_accel)
         return float(np.clip(u_cbf, self.a_min, self.a_max))
 
-    def _solve_cvxpy(self, longitudinal_dist: float, v_ego: float, v_target: float, v_des: float, dt: float, h_current: float) -> float:
-        """Explicit CVXPY formulation using discrete-time barrier evolution."""
+    def _solve_cvxpy(self,
+                     longitudinal_dist: float,
+                     v_ego: float,
+                     v_target: float,
+                     v_des: float,
+                     dt: float,
+                     h_current: float) -> float:
+        """
+        Solves the discrete-time CBF-QP using explicit CVXPY optimization.
+
+        Args:
+            longitudinal_dist (float): Relative distance in Ego's local longitudinal frame (x_local).
+            v_ego (float): Current speed of the Ego vehicle in m/s.
+            v_target (float): Speed of the target lead vehicle in m/s.
+            v_des (float): Desired cruising speed in m/s.
+            dt (float): Simulation time step delta in seconds.
+            h_current (float): Current value of the safety barrier function.
+
+        Returns:
+            float: Optimal control input (acceleration) in m/s^2. Returns minimum acceleration (a_min) if infeasible.
+        """
         u = cp.Variable(1)
 
         v_ego_next = v_ego + u * dt
