@@ -1,14 +1,23 @@
 from pathlib import Path
-#from src.vehicle_dynamics import get_car_polygon
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-#from PIL import Image
 from commonroad.visualization.mp_renderer import MPRenderer
 from src.ego_state import EgoState
 
-def draw_obstacle_trajectories(ax, obstacles, zorder=50):
-    """Draws predicted dotted trajectory paths for surrounding traffic."""
+def draw_obstacle_trajectories(
+        ax,
+        obstacles,
+        zorder=50):
+    """
+    Draws predicted dotted trajectory paths for surrounding traffic obstacles.
+
+    Args:
+        ax (plt.Axes): Matplotlib axes instance to draw trajectories on.
+        obstacles (list): List of obstacle objects to project trajectories for.
+        zorder (int, optional): Drawing layer z-order index for matplotlib. Defaults to 50.
+    """
+
     for obs in obstacles:
         positions = []
         if hasattr(obs, 'prediction') and obs.prediction is not None:
@@ -49,8 +58,30 @@ def render_frame(
         right_tracked_ids: set = None
         ):
     """
-    Renders simulation frame with Radar FOV cone, dynamic CBF safety buffer, 
-    optional trajectory prediction paths, and camera tracking centered on Ego.
+    Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
+
+    Args:
+        scenario: CommonRoad scenario instance containing lanelet network and metadata.
+        planning_problem_set: CommonRoad planning problem set for goal region display.
+        ego (EgoState): Current Ego vehicle state object.
+        d_safe (float): Calculated safe longitudinal distance buffer in meters.
+        h_val (float | None): Control Barrier Function barrier value h(x), if available.
+        radar_range (float): Maximum range of front radar in meters.
+        radar_fov_deg (float): Field of view of front radar in degrees.
+        surrounding_states (list): List of tuples (obstacle, corners, is_hit) for surrounding traffic.
+        has_collided (bool): Whether a collision has occurred at this step.
+        step (int): Current simulation time step index.
+        num_steps (int): Total number of simulation steps.
+        frame_path (Path): File path where the rendered PNG frame image will be saved.
+        show_trajectories (bool, optional): Whether to draw predicted paths for traffic. Defaults to False.
+        rear_radar_range (float | None, optional): Range of rear radar in meters. Defaults to None.
+        rear_radar_fov_deg (float | None, optional): FOV of rear radar in degrees. Defaults to None.
+        front_tracked_ids (set | None, optional): Set of obstacle IDs detected by front radar. Defaults to None.
+        rear_tracked_ids (set | None, optional): Set of obstacle IDs detected by rear radar. Defaults to None.
+        uss_range (float | None, optional): Range of ultrasonic side sensors in meters. Defaults to None.
+        uss_fov_deg (float | None, optional): FOV of ultrasonic side sensors in degrees. Defaults to None.
+        left_tracked_ids (set | None, optional): Set of obstacle IDs detected by left USS. Defaults to None.
+        right_tracked_ids (set | None, optional): Set of obstacle IDs detected by right USS. Defaults to None.
     """
 
     front_tracked_ids = front_tracked_ids or set()
@@ -74,13 +105,6 @@ def render_frame(
     # 1. Optionally draw trajectory predictions for obstacles
     if show_trajectories:
         draw_obstacle_trajectories(ax, [obs for obs, _, _ in surrounding_states], zorder=50)
-
-    #ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w = ego_state
-    #cos_a, sin_a = np.cos(ego_orient), np.sin(ego_orient)
-    #front_x = ego_x + (ego_l / 2.0) * cos_a
-    #front_y = ego_y + (ego_l / 2.0) * sin_a
-    #rear_x = ego_x - (ego_l / 2.0) * cos_a
-    #rear_y = ego_y - (ego_l / 2.0) * sin_a
 
     front_pos = ego.position + (ego.length / 2.0) * ego.heading_vector
     rear_pos = ego.position - (ego.length / 2.0) * ego. heading_vector
@@ -155,8 +179,6 @@ def render_frame(
         [0.0, w2]
     ])
     world_buffer = front_pos + np.outer(local_buffer[:,0], ego.heading_vector) + np.outer(local_buffer[:,1], ego.normal_vector)
-    #rot_mat = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
-    #world_buffer = local_buffer @ rot_mat.T + np.array([front_x, front_y])
 
     if h_val is None or h_val > 5.0:
         zone_color, zone_alpha = "#2ECC71", 0.25
@@ -200,7 +222,6 @@ def render_frame(
         ))
 
     # 5. Render Ego Vehicle
-    #_, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     
     ego_color = "#FF0000" if has_collided else "#00FF00"
     ax.add_patch(patches.Polygon(
