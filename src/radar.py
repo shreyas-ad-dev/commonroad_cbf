@@ -1,26 +1,29 @@
 # src/radar.py
-#from typing import List, Tuple, Optional
 import numpy as np
 from src.ego_state import EgoState
-
 
 class RadarSensor:
     """
     Simulates a body-frame aligned Radar sensor with finite range and Field of View (FOV).
-    Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations.
-    """
-    def __init__(
-        self,
-        range_max: float = 70.0,
-        fov_deg: float = 60.0,
-        mount_position: str = "front"
-        ):
-        """
-        :param range_max: Maximum detection range in meters
-        :param fov_deg: Total azimuth field of view in degrees (+/- fov_deg/2)
-        :param mount_position: Orientation relative to vehicle heading ('front' or 'rear')
-        """
 
+    Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations on the vehicle.
+    """
+    def __init__(self,
+                 range_max: float = 70.0,
+                 fov_deg: float = 60.0,
+                 mount_position: str = "front"):
+        """
+        Initializes the RadarSensor instance.
+
+        Args:
+            range_max (float, optional): Maximum detection range in meters. Defaults to 70.0.
+            fov_deg (float, optional): Total azimuth field of view in degrees. Defaults to 60.0.
+            mount_position (str, optional): Orientation relative to vehicle ('front' or 'rear'). Defaults to "front".
+
+        Raises:
+            ValueError: If mount_position is not 'front' or 'rear'.
+        """
+       
         if mount_position not in ["front", "rear"]:
             raise ValueError("mount_position must be either 'front' or 'rear'")
 
@@ -29,18 +32,22 @@ class RadarSensor:
         self.mount_position = mount_position
         self.half_fov_rad = np.radians(fov_deg / 2.0)
 
-    def to_local_frame(
-        self,
-        ego: EgoState,
-        obs_x: float,
-        obs_y: float
-        ) -> np.ndarray:
+    def to_local_frame(self,
+                       ego: EgoState,
+                       obs_x: float,
+                       obs_y: float) -> np.ndarray:
         """
-        Transforms world coordinates into Ego's body-fixed local frame:
-        x_local: Longitudinal distance along Ego's heading direction.
-        y_local: Lateral distance perpendicular to Ego's heading direction.
-        """
+        Transforms world coordinates into Ego's body-fixed local frame.
 
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obs_x (float): Target X coordinate in global world frame.
+            obs_y (float): Target Y coordinate in global world frame.
+
+        Returns:
+            np.ndarray: A 2D vector [x_local, y_local] in Ego's body-fixed frame.
+        """
+       
         # [dx, dy]
         d_vec = np.array([obs_x, obs_y]) - ego.position
 
@@ -51,15 +58,26 @@ class RadarSensor:
 
         return np.array([x_local, y_local])
 
-    def is_in_fov(
-            self,
-            ego: EgoState,
-            obs_x: float,
-            obs_y: float) -> tuple[bool, float, float, float]:
+    def is_in_fov(self,
+                  ego: EgoState,
+                  obs_x: float,
+                  obs_y: float) -> tuple[bool, float, float, float]:
         """
-        Checks if a coordinate is within the Radar's field of view cone.
-        Returns: (in_fov, distance, x_local, y_local)
+        Checks if a target coordinate falls within the Radar's field of view cone.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obs_x (float): Target X coordinate in global world frame.
+            obs_y (float): Target Y coordinate in global world frame.
+
+        Returns:
+            tuple[bool, float, float, float]: A tuple containing:
+                - in_fov (bool): True if target is within detection cone.
+                - dist (float): Euclidean distance to target in meters.
+                - x_local (float): Target longitudinal offset in Ego local frame.
+                - y_local (float): Target lateral offset in Ego local frame.
         """
+
         pos_local = self.to_local_frame(ego, obs_x, obs_y)
         dist = float(np.linalg.norm(pos_local))
 
@@ -79,20 +97,32 @@ class RadarSensor:
         in_fov = abs(angle) <= self.half_fov_rad
         return in_fov, dist, pos_local[0], pos_local[1]
 
-    def track_lead_vehicle(
-            self, 
-            ego: EgoState,
-            obstacles: list, 
-            step: int, 
-            lane_corridor_width: float = 2.5,
-            target_offset: float = 0.0,
-            road_heading: float | None = None,
-            is_changing_lane: bool = False
-            ) -> tuple[float, float, float, object, float] | None:
+    def track_lead_vehicle(self, 
+                           ego: EgoState,
+                           obstacles: list, 
+                           step: int, 
+                           lane_corridor_width: float = 2.5,
+                           target_offset: float = 0.0,
+                           road_heading: float | None = None,
+                           is_changing_lane: bool = False) -> tuple[float, float, float, object, float] | None:
         """
-        Scans vehicles in Ego's rotated FOV cone and tracks the closest lead vehicle.
-        Uses road_heading (if provided) for lane corridor matching so diagonal vehicle 
-        orientation during lane changes doesn't misclassify target lane vehicles.
+        Scans vehicles in Ego's FOV cone and tracks the closest lead target.
+
+        Uses road_heading (if provided) for lane corridor alignment to prevent vehicle 
+        orientation during diagonal maneuvers from misclassifying target lane traffic.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacles (list): List of surrounding dynamic obstacle objects.
+            step (int): Current simulation time step index.
+            lane_corridor_width (float, optional): Total width of lane corridor to monitor. Defaults to 2.5.
+            target_offset (float, optional): Lateral offset to target lane. Defaults to 0.0.
+            road_heading (float | None, optional): Reference road angle in radians. Defaults to None.
+            is_changing_lane (bool, optional): Whether Ego is currently executing a lane change. Defaults to False.
+
+        Returns:
+            tuple[float, float, float, object, float] | None: Tuple of (x, y, velocity, obstacle_id, x_local)
+            for the lead vehicle, or None if no vehicle is tracked.
         """
         if self.mount_position != "front":
             return None
@@ -129,12 +159,9 @@ class RadarSensor:
             long_road = np.dot(d_vec, u_road)
             # -dx * sin_a + dy * cos_a
             lat_road = np.dot(d_vec, n_road)
-            #long_road = dx * u_road[0] + dy * u_road[1]
-            #lat_road = dx * n_road[0] + dy * n_road[1]
-
+       
             if long_road > 0.0:  # Vehicle must be ahead along the road
                 in_current_lane = abs(lat_road) <= half_corridor
-                #in_target_lane = is_changing_lane and abs(lat_road - target_offset) <= half_corridor
                 # Consider target lane vehicles if ego is changing lanes OR if a target offset is defined
                 in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
 
@@ -146,31 +173,40 @@ class RadarSensor:
 
         return lead_target
 
-    def is_adjacent_lane_clear(
-            self,
-            ego: EgoState,
-            surrounding_obstacles: list,
-            step: int,
-            target_lane_offset: float,
-            safety_gap_front: float = 12.0,
-            safety_gap_rear: float = 10.0,
-            road_heading: float | None = None,
-            rear_radar: "RadarSensor | None" = None,
-            lane_tolerance: float = 1.8,
-            ) -> bool:
+    def is_adjacent_lane_clear(self,
+                               ego: EgoState,
+                               surrounding_obstacles: list,
+                               step: int,
+                               target_lane_offset: float,
+                               safety_gap_front: float = 12.0,
+                               safety_gap_rear: float = 10.0,
+                               road_heading: float | None = None,
+                               rear_radar: "RadarSensor | None" = None,
+                               lane_tolerance: float = 1.8) -> bool:
         """
-        Checks if the target adjacent lane is free of obstacles within a 
-        longitudinal safety corridor around the Ego vehicle using front and rear radars.
+        Evaluates whether an adjacent lane target gap is clear using front and rear radars.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            surrounding_obstacles (list): List of dynamic obstacles in the scene.
+            step (int): Current simulation time step index.
+            target_lane_offset (float): Lateral offset to target lane (+ for left, - for right).
+            safety_gap_front (float, optional): Longitudinal safety buffer ahead in meters. Defaults to 12.0.
+            safety_gap_rear (float, optional): Longitudinal safety buffer behind in meters. Defaults to 10.0.
+            road_heading (float | None, optional): Reference road angle in radians. Defaults to None.
+            rear_radar (RadarSensor | None, optional): Rear-facing radar sensor instance. Defaults to None.
+            lane_tolerance (float, optional): Half-width tolerance for lane boundary matching. Defaults to 1.8.
+
+        Returns:
+            bool: True if target adjacent lane safety corridor is completely clear.
         """
+
         if road_heading is not None:
             u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
             n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
         else:
             u_hat = ego.heading_vector
             n_hat = ego.normal_vector
-        #ref_heading = road_heading if road_heading is not None else ego.orientation
-        #u_hat = np.array([np.cos(ref_heading), np.sin(ref_heading)])   # Forward
-        #n_hat = np.array([-np.sin(ref_heading), np.cos(ref_heading)])  # Perpendicular (Left)
 
         for obs in surrounding_obstacles:
             st = obs.state_at_time(step)
@@ -201,13 +237,22 @@ class RadarSensor:
 
         return True
 
-    def get_detected_obstacle_ids(
-            self,
-            ego: EgoState,
-            obstacles: list,
-            step: int
-            ) -> set:
-        """Returns a set of obstacle IDs that fall within this radar's FOV at the current step."""
+    def get_detected_obstacle_ids(self,
+                                  ego: EgoState,
+                                  obstacles: list,
+                                  step: int) -> set:
+        """
+        Gets the set of obstacle IDs that fall within this radar's FOV at the given step.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacles (list): List of dynamic obstacle objects.
+            step (int): Current simulation time step index.
+
+        Returns:
+            set: Set of detected obstacle IDs.
+        """
+
         detected_ids = set()
         for obs in obstacles:
             st = obs.state_at_time(step)
