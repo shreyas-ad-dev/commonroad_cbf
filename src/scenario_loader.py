@@ -4,10 +4,30 @@ from commonroad.common.file_reader import CommonRoadFileReader
 
 def load_scenario_and_ego(xml_path: Path):
     """
-    Loads a CommonRoad scenario XML and returns a unified data structure
-    supporting both existing obstacle matching (ZAM style) and synthetic 
-    Ego spawns (USA style).
+    Loads a CommonRoad scenario XML and parses Ego vehicle and obstacle data.
+
+    Supports both existing obstacle matching (ZAM style) where Ego is embedded 
+    in scenario obstacles, and synthetic Ego spawns (USA style) where Ego is defined 
+    purely by the scenario's initial planning problem.
+
+    Args:
+        xml_path (Path): Path to the CommonRoad scenario XML file.
+
+    Returns:
+        dict: A dictionary containing parsed scenario objects and Ego parameters:
+            - 'scenario': The parsed CommonRoad Scenario instance.
+            - 'planning_problem_set': The scenario's PlanningProblemSet instance.
+            - 'ego_problem': Primary PlanningProblem object for the Ego vehicle.
+            - 'ego_obstacle': Matched scenario obstacle object (if ZAM style), else None.
+            - 'ego_params': Dict containing Ego initial state ('id', 'x', 'y', 
+              'orientation', 'velocity', 'length', 'width').
+            - 'surrounding_obstacles': List of remaining dynamic dynamic/static obstacles.
+
+    Raises:
+        FileNotFoundError: If xml_path does not exist on disk.
+        ValueError: If no planning problems are present in the XML file.
     """
+    
     if not xml_path.exists():
         raise FileNotFoundError(f"Scenario XML file not found at: {xml_path}")
 
