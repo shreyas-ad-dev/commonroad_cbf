@@ -11,6 +11,7 @@ from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
     get_current_lane_width,
+    get_road_heading_at_position,
     extract_target_lanelet_path
 )
 from src.radar import RadarSensor
@@ -99,11 +100,11 @@ for step in range(NUM_STEPS):
     )
 
     # Lead Tracking via Radar
-    current_lateral_offset = ego.y - ego_params["y"]
+    road_heading = get_road_heading_at_position(scenario, ego.position)
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
-        target_offset=current_lateral_offset,
-        road_heading=ego_params["orientation"],
+        target_offset=lane_width,
+        road_heading=road_heading,
         is_changing_lane=True
     )
 

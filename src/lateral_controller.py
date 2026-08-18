@@ -2,6 +2,40 @@ from scipy.interpolate import interp1d
 import numpy as np
 from src.ego_state import EgoState
 
+def get_road_heading_at_position(scenario, position) -> float:
+    """
+    Computes the road heading angle (in radians) from the centerline 
+    of the nearest lanelet at a given (x, y) position.
+    """
+    # Find lanelet(s) containing or closest to the position
+    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([position])[0]
+    
+    if not lanelet_ids:
+        # Fallback to absolute nearest lanelet if strictly outside boundaries
+        lanelet = scenario.lanelet_network.find_lanelet_by_id(
+            scenario.lanelet_network.find_lanelet_by_position([position])[0]
+        )
+    else:
+        lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+
+    # Extract centerline points
+    centerline = lanelet.center_vertices
+    
+    # Find the closest segment on the centerline
+    distances = np.linalg.norm(centerline - position, axis=1)
+    idx = np.argmin(distances)
+
+    # Compute heading vector along the centerline segment
+    if idx < len(centerline) - 1:
+        pt1, pt2 = centerline[idx], centerline[idx + 1]
+    else:
+        pt1, pt2 = centerline[idx - 1], centerline[idx]
+
+    dx = pt2[0] - pt1[0]
+    dy = pt2[1] - pt1[1]
+
+    return np.arctan2(dy, dx)
+
 def extract_target_lanelet_path(
         scenario,
         ego: EgoState,

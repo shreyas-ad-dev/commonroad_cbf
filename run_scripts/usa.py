@@ -12,6 +12,7 @@ from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
     get_current_lane_width,
+    get_road_heading_at_position,
     extract_target_lanelet_path
 )
 from src.radar import RadarSensor
@@ -103,10 +104,11 @@ for step in range(NUM_STEPS):
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
+    road_heading = get_road_heading_at_position(scenario, ego.position)
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
         target_offset=planner.target_offset if planner.state == "LANE_CHANGE" else 0.0,
-        road_heading=ego_params["orientation"],
+        road_heading=road_heading,
         is_changing_lane=(planner.state == "LANE_CHANGE")
     )
 
