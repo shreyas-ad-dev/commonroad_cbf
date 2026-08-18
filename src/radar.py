@@ -9,8 +9,7 @@ class RadarSensor(BaseSensor):
     Simulates a body-frame aligned Radar sensor with finite range and Field of View (FOV).
 
     Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations on the vehicle.
-    Inherits coordinate transformations from BaseSensor and uses step-caching to avoid
-    redundant FOV checks across controller, behavior planner, and visualizer calls.
+    Evaluates FOV containment across all bounding box corners and center of dynamic obstacles.
     """
 
     def __init__(self,
@@ -38,48 +37,60 @@ class RadarSensor(BaseSensor):
         self._last_step: int | None = None
         self._scan_cache: dict[str, Any] = {
             "detected_ids": set(),
-            "fov_data": {},  # Maps obs_id -> (in_fov, dist, x_local, y_local)
+            "fov_data": {},  # Maps obs_id -> (in_fov, min_dist, center_x_local, center_y_local)
             "lead_target": None
         }
 
     def is_in_fov(self,
                   ego: EgoState,
-                  obs_x: float,
-                  obs_y: float) -> tuple[bool, float, float, float]:
+                  obstacle: object,
+                  step: int) -> tuple[bool, float, float, float]:
         """
-        Checks if a target coordinate falls within the Radar's field of view cone.
+        Checks if an obstacle's center or any of its bounding box corners fall within the Radar's FOV.
 
         Args:
             ego (EgoState): Current state of the Ego vehicle.
-            obs_x (float): Target X coordinate in global world frame.
-            obs_y (float): Target Y coordinate in global world frame.
+            obstacle (object): Dynamic obstacle instance to evaluate.
+            step (int): Current simulation time step index.
 
         Returns:
             tuple[bool, float, float, float]: A tuple containing:
-                - in_fov (bool): True if target is within detection cone.
-                - dist (float): Euclidean distance to target in meters.
-                - x_local (float): Target longitudinal offset in Ego local frame.
-                - y_local (float): Target lateral offset in Ego local frame.
+                - any_corner_in_fov (bool): True if any point falls inside detection cone.
+                - min_dist (float): Minimum Euclidean distance across all points.
+                - center_x_local (float): Obstacle center longitudinal offset in Ego frame.
+                - center_y_local (float): Obstacle center lateral offset in Ego frame.
         """
-        pos_local = self.to_local_frame(ego, obs_x, obs_y)
-        x_local, y_local = pos_local[0], pos_local[1]
-        dist = float(np.hypot(x_local, y_local))
+        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
+        if eval_data is None:
+            return False, float('inf'), 0.0, 0.0
 
-        if dist > self.range_max:
-            return False, dist, x_local, y_local
+        center_local, local_points = eval_data
+        center_x_local, center_y_local = center_local[0], center_local[1]
 
-        # Longitudinal direction constraint based on mounting point
-        if self.mount_position == "front" and x_local <= 0.0:
-            return False, dist, x_local, y_local
-        elif self.mount_position == "rear" and x_local >= 0.0:
-            return False, dist, x_local, y_local
+        min_dist = float('inf')
+        any_corner_in_fov = False
 
-        # Measure relative azimuth angle from sensor bore-axis
-        sensor_x = x_local if self.mount_position == "front" else -x_local
-        angle = np.arctan2(y_local, sensor_x)
+        for pt in local_points:
+            x_local, y_local = pt[0], pt[1]
+            dist = float(np.hypot(x_local, y_local))
 
-        in_fov = abs(angle) <= self.half_fov_rad
-        return in_fov, dist, x_local, y_local
+            if dist < min_dist:
+                min_dist = dist
+
+            if dist <= self.range_max:
+                # Direction constraint based on mounting orientation
+                is_valid_direction = (
+                    (self.mount_position == "front" and x_local > 0.0) or
+                    (self.mount_position == "rear" and x_local < 0.0)
+                )
+
+                if is_valid_direction:
+                    sensor_x = x_local if self.mount_position == "front" else -x_local
+                    angle = np.arctan2(y_local, sensor_x)
+                    if abs(angle) <= self.half_fov_rad:
+                        any_corner_in_fov = True
+
+        return any_corner_in_fov, min_dist, center_x_local, center_y_local
 
     def scan(self,
              ego: EgoState,
@@ -96,7 +107,7 @@ class RadarSensor(BaseSensor):
         Returns:
             dict[str, Any]: Reference to internal scan cache containing:
                 - 'detected_ids': set[int] of detected obstacle IDs.
-                - 'fov_data': dict[int, tuple] mapping ID to (in_fov, dist, x_local, y_local).
+                - 'fov_data': dict[int, tuple] mapping ID to (in_fov, min_dist, x_local, y_local).
         """
         if self._last_step != step:
             self._last_step = step
@@ -104,14 +115,9 @@ class RadarSensor(BaseSensor):
             fov_data: dict[int, tuple[bool, float, float, float]] = {}
 
             for obs in obstacles:
-                st = obs.state_at_time(step)
-                if st is None:
-                    continue
+                in_fov, min_dist, center_x_local, center_y_local = self.is_in_fov(ego, obs, step)
 
-                ox, oy = st.position[0], st.position[1]
-                in_fov, dist, x_local, y_local = self.is_in_fov(ego, ox, oy)
-
-                fov_data[obs.obstacle_id] = (in_fov, dist, x_local, y_local)
+                fov_data[obs.obstacle_id] = (in_fov, min_dist, center_x_local, center_y_local)
                 if in_fov:
                     detected_ids.add(obs.obstacle_id)
 
@@ -163,11 +169,11 @@ class RadarSensor(BaseSensor):
             if st is None or obs.obstacle_id not in scan_res["fov_data"]:
                 continue
 
-            in_fov, dist, x_local, _ = scan_res["fov_data"][obs.obstacle_id]
+            in_fov, min_dist, center_x_local, _ = scan_res["fov_data"][obs.obstacle_id]
             if not in_fov:
                 continue
 
-            # Road-aligned corridor projection
+            # Road-aligned corridor projection using center position
             d_vec = st.position - ego.position
             long_road = np.dot(d_vec, u_road)
             lat_road = np.dot(d_vec, n_road)
@@ -177,10 +183,10 @@ class RadarSensor(BaseSensor):
                 in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
 
                 if in_current_lane or in_target_lane:
-                    if dist < closest_dist:
-                        closest_dist = dist
+                    if min_dist < closest_dist:
+                        closest_dist = min_dist
                         target_v = float(getattr(st, 'velocity', 15.0))
-                        lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, x_local)
+                        lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
 
         return lead_target
 

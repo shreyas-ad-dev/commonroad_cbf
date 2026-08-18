@@ -28,7 +28,7 @@ SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
 GIF_NAME = "usa_us101_radar_cbf.gif"
 NUM_STEPS = 80
-DESIRED_SPEED = 20.0  # m/s
+DESIRED_SPEED = 16.5  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
 setup_frames_directory(FRAMES_DIR)

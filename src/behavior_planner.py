@@ -92,8 +92,8 @@ class BehaviorPlanner:
                 surrounding_obstacles,
                 step,
                 self.target_offset,
-                safety_gap_front=15.0,
-                safety_gap_rear=18.0,
+                safety_gap_front=10.0,
+                safety_gap_rear=12.0,
                 road_heading=ego.orientation,
                 rear_radar=rear_radar
         )
