@@ -76,7 +76,7 @@ class BehaviorPlanner:
             self.start_y = ego.y
 
         if self.mode == "MAP_FOLLOW":
-            updated_path = extract_target_lanelet_path(scenario, ego.x, ego.y)
+            updated_path = extract_target_lanelet_path(scenario, ego )
             return self.state, updated_path
 
         if self.state == "LANE_CHANGE":
