@@ -2,8 +2,20 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from shapely.geometry import LineString, Polygon as ShapelyPolygon, Point as ShapelyPoint
 from commonroad.visualization.mp_renderer import MPRenderer
 from src.ego_state import EgoState
+
+def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
+    """Creates a Shapely Polygon representing a sensor wedge/cone."""
+    angles = np.radians(np.linspace(theta1_deg, theta2_deg, num_points))
+    arc_points = [
+        (center[0] + r * np.cos(a), center[1] + r * np.sin(a)) 
+        for a in angles
+    ]
+    # Wedge is center point connected to arc points
+    wedge_coords = [tuple(center)] + arc_points + [tuple(center)]
+    return ShapelyPolygon(wedge_coords)
 
 def draw_obstacle_trajectories(
         ax,
@@ -109,14 +121,16 @@ def render_frame(
     front_pos = ego.position + (ego.length / 2.0) * ego.heading_vector
     rear_pos = ego.position - (ego.length / 2.0) * ego. heading_vector
     heading_deg = np.degrees(ego.orientation)
+    sensor_polygons = []
 
 
     # 2. Render Radar and USS FOV Cone
+    front_t1, front_t2 = heading_deg - (radar_fov_deg / 2.0), heading_deg + (radar_fov_deg / 2.0)
     front_fov_wedge = patches.Wedge(
         center=front_pos,
         r=radar_range,
-        theta1=heading_deg - (radar_fov_deg / 2.0),
-        theta2=heading_deg + (radar_fov_deg / 2.0),
+        theta1=front_t1,
+        theta2=front_t2,
         facecolor="#00E5FF",
         alpha=0.22,
         edgecolor="#0099CC",
@@ -125,13 +139,21 @@ def render_frame(
         zorder=70
     )
     ax.add_patch(front_fov_wedge)
+    sensor_polygons.append((
+        create_wedge_polygon(front_pos, radar_range, front_t1, front_t2),
+        "#00E5FF", # Highlight color for front radar
+        front_tracked_ids,
+        front_pos
+    ))
 
     if rear_radar_range is not None and rear_radar_fov_deg is not None:
+        rear_t1 = heading_deg + 180.0 - (rear_radar_fov_deg / 2.0)
+        rear_t2 = heading_deg + 180.0 + (rear_radar_fov_deg / 2.0)
         rear_fov_wedge = patches.Wedge(
                 center=rear_pos,
                 r=rear_radar_range,
-                theta1=heading_deg + 180.0 - (rear_radar_fov_deg/ 2.0),
-                theta2=heading_deg + 180.0 + (rear_radar_fov_deg/ 2.0),
+                theta1=rear_t1,
+                theta2=rear_t2,
                 facecolor="#AB47BC",
                 alpha=0.22,
                 edgecolor="#7B1FA2",
@@ -140,14 +162,22 @@ def render_frame(
                 zorder=70
         )
         ax.add_patch(rear_fov_wedge)
+        sensor_polygons.append((
+            create_wedge_polygon(rear_pos, rear_radar_range, rear_t1, rear_t2), 
+            "#E040FB",  # Highlight color for rear radar
+            rear_tracked_ids,
+            rear_pos
+        ))
+
 
     if uss_range is not None and uss_fov_deg is not None:
         # Left USS (+90 deg)
+        left_t1, left_t2 = heading_deg + 90.0 - (uss_fov_deg / 2.0), heading_deg + 90.0 + (uss_fov_deg / 2.0)
         left_wedge = patches.Wedge(
                 center=ego.position,
                 r=uss_range,
-                theta1=heading_deg + 90.0 - (uss_fov_deg / 2.0),
-                theta2=heading_deg + 90.0 + (uss_fov_deg / 2.0),
+                theta1=left_t1,
+                theta2=left_t2,
                 facecolor="#FFE082",
                 alpha=0.60,
                 edgecolor="#FFA000",
@@ -155,13 +185,21 @@ def render_frame(
                 zorder=70
         )
         ax.add_patch(left_wedge)
+        sensor_polygons.append((
+            create_wedge_polygon(ego.position, uss_range, left_t1, left_t2), 
+            "#FFB300",  # Highlight color for side USS
+            left_tracked_ids,
+            ego.position
+        ))
+
             
         # Right USS (-90 deg)
+        right_t1, right_t2 = heading_deg - 90.0 - (uss_fov_deg / 2.0), heading_deg - 90.0 + (uss_fov_deg / 2.0)
         right_wedge = patches.Wedge(
                 center=ego.position,
                 r=uss_range,
-                theta1=heading_deg - 90.0 - (uss_fov_deg / 2.0),
-                theta2=heading_deg - 90.0 + (uss_fov_deg / 2.0),
+                theta1=right_t1,
+                theta2=right_t2,
                 facecolor="#FFE082",
                 alpha=0.60,
                 edgecolor="#FFA000",
@@ -169,6 +207,13 @@ def render_frame(
                 zorder=70
         )
         ax.add_patch(right_wedge)
+        sensor_polygons.append((
+            create_wedge_polygon(ego.position, uss_range, right_t1, right_t2), 
+            "#FFB300", # Highlight color for side USS
+            right_tracked_ids,
+            ego.position
+        ))
+
 
     # 3. Render CBF Safety Buffer Zone
     w2 = ego.width / 2.0
@@ -196,32 +241,63 @@ def render_frame(
     # 4. Render Surrounding Vehicles
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
-        in_front = obs_id in front_tracked_ids
-        in_rear = obs_id in rear_tracked_ids
-        in_side = (obs_id in left_tracked_ids) or (obs_id in right_tracked_ids)
-
         obs_color = "#E67E22" if is_hit else "#1F77B4"
 
-        if in_front:
-            edge_color = "#00E5FF" # Cyan for Front Radar
-            lw = 2.5
-        elif in_rear:
-            edge_color = "#E040FB" # Magenta for Rear Radar
-            lw = 2.5
-        elif in_side:
-            edge_color = "#FFB300" # Amber/Gold for SIde USS
-            lw = 2.5
-        else:
-            edge_color = "black"
-            lw = 1.0
-
+        obs_poly_shapely = ShapelyPolygon(corners)
         ax.add_patch(patches.Polygon(
             corners, closed=True, 
-            facecolor=obs_color, edgecolor=edge_color, 
-            linewidth=lw, zorder=100
+            facecolor=obs_color, edgecolor="black", 
+            linewidth=1.0, zorder=100
         ))
 
-    # 5. Render Ego Vehicle
+        for wedge_poly, highlight_color, tracked_ids, sensor_origin in sensor_polygons:
+            if obs_id in tracked_ids and obs_poly_shapely.intersects(wedge_poly):
+                
+                # Extract counter-clockwise outer boundary points
+                pts = np.array(obs_poly_shapely.exterior.coords)[:-1]
+                num_pts = len(pts)
+                visible_segments = []
+
+                # Find segments whose outward normal points towards the sensor origin
+                for i in range(num_pts):
+                    p1 = pts[i]
+                    p2 = pts[(i + 1) % num_pts]
+                    edge = p2 - p1
+                    
+                    # Outward normal vector for CCW polygon: (dy, -dx)
+                    normal = np.array([edge[1], -edge[0]])
+                    vec_to_sensor = sensor_origin - p1
+
+                    # Edge faces sensor if dot product is positive
+                    if np.dot(normal, vec_to_sensor) > 0:
+                        visible_segments.append(LineString([p1, p2]))
+
+                # Intersect visible segments with sensor wedge
+                for seg in visible_segments:
+                    if seg.intersects(wedge_poly):
+                        intersected = seg.intersection(wedge_poly)
+                        if intersected.is_empty:
+                            continue
+
+                        lines = (
+                            intersected.geoms 
+                            if hasattr(intersected, 'geoms') 
+                            else [intersected]
+                        )
+
+                        for line in lines:
+                            if line.geom_type in ['LineString', 'LinearRing']:
+                                line_coords = np.array(line.coords)
+                                ax.plot(
+                                    line_coords[:, 0], line_coords[:, 1],
+                                    color=highlight_color,
+                                    linewidth=3.0,
+                                    solid_capstyle='round',
+                                    zorder=105
+                                )
+
+
+           # 5. Render Ego Vehicle
     
     ego_color = "#FF0000" if has_collided else "#00FF00"
     ax.add_patch(patches.Polygon(
