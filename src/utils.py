@@ -40,7 +40,7 @@ def create_gif_from_frames(
 def build_gif_and_cleanup(
         frame_files: List[Path],
         gif_path: Path, dt: float) -> None:
-   """
+    """
     Generates a GIF animation from frame files and purges temporary frame images and folders.
 
     Args:
@@ -48,7 +48,6 @@ def build_gif_and_cleanup(
         gif_path (Path): Output destination path for the compiled GIF.
         dt (float): Time step delta between consecutive frames in seconds.
     """
-
     if not frame_files:
         print("  No frame files found to generate GIF.")
         return
