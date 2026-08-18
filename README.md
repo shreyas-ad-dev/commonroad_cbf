@@ -1,353 +1,138 @@
-# CommonRoad CBF — Autonomous Vehicle Control & Simulation
+# CommonRoad CBF
 
-A CommonRoad-based autonomous driving simulation framework providing a foundation for experimenting with **vehicle dynamics, perception, behaviour planning, and safety-critical control**.
+A modular autonomous-driving simulation framework built on [CommonRoad](https://commonroad.in.tum.de/), combining simulated perception, behavior planning, and safety-critical control in a closed-loop environment.
 
-The repository currently provides a nominal closed-loop baseline using radar-based perception, a finite-state behaviour planner, Control Barrier Function (CBF) based longitudinal control, Stanley lateral control, and a kinematic bicycle vehicle model.
+The project currently brings together **radar and ultrasonic sensing, behavior planning, and safety-critical control**, with the components designed to be developed and evaluated independently.
 
-The project is intended as a **foundation for subsequent research experiments** involving imperfect perception, uncertainty, prediction, and safety-critical autonomous driving.
+The longer-term goal is to use this as a foundation for studying how **uncertainty and imperfections in perception affect downstream planning, control, and safety**.
 
----
+----------
 
 ## Overview
 
-The system operates as a closed-loop autonomous driving stack:
+The system follows a modular perception-to-control pipeline:
 
 ```text
                  CommonRoad Scenario
                          │
                          ▼
-                  ┌─────────────┐
-                  │  Perception │
-                  │    Radar    │
-                  └──────┬──────┘
+                    Perception
                          │
                          ▼
-                  ┌─────────────┐
-                  │  Behaviour  │
-                  │   Planner   │
-                  └──────┬──────┘
+                 Behavior Planning
                          │
                          ▼
-                ┌─────────────────┐
-                │ Safety-Critical │
-                │     Control     │
-                │                 │
-                │   CBF-QP +      │
-                │    Stanley      │
-                └───────┬─────────┘
-                        │
-                        ▼
-                ┌──────────────────┐
-                │ Vehicle Dynamics │
-                │ Kinematic Bicycle│
-                └───────┬──────────┘
-                        │
-                        ▼
-                  Updated State
-                        │
-                        └──────────► Next Simulation Step
+               Safety-Critical Control
+                         │
+                         ▼
+                    Simulation
+
 ```
 
-The separation between perception, planning, control, and vehicle dynamics is intentional. It allows individual components to be modified and evaluated independently in future experiments.
+The components are kept relatively independent, making it possible to modify individual parts of the stack without redesigning the entire system.
 
----
-
-## Current Capabilities
-
-### Perception
-
-The current perception module provides a simplified forward-facing radar model.
-
-* Configurable radar field of view and range
-* Transformation of detected obstacles into the ego-vehicle frame
-* Dynamic obstacle filtering
-* Lead-vehicle identification within the current driving corridor
-
-**Implementation:** `src/radar.py`
-
-### Behaviour Planning
-
-A finite-state behaviour planner handles high-level driving behaviour.
-
-Current states include:
-
-* `LANE_KEEP`
-* `GAP_SEARCH`
-* `LANE_CHANGE`
-
-The planner uses CommonRoad lanelet information to identify and construct reference trajectories for the vehicle.
-
-**Implementation:** `src/behavior_planner.py`
-
-### Longitudinal Control
-
-Longitudinal safety is handled using a Control Barrier Function formulated as a Quadratic Program.
-
-The current baseline uses a dynamic safety-distance formulation:
-
-$$
-h(x) = \Delta x - (d_{\min} + v_{\text{ego}}\tau)
-$$
-
-The controller attempts to maintain the safety constraint while tracking a desired cruising velocity.
-
-The implementation includes both:
-
-* CBF-QP optimisation using CVXPY
-* Analytical fallback
-
-**Implementation:** `src/cbf_solver.py`
-
-### Lateral Control
-
-Lateral trajectory tracking is performed using the Stanley controller.
-
-The controller uses:
-
-* cross-track error
-* heading error
-* vehicle velocity
-
-to determine the steering command.
-
-**Implementation:** `src/lateral_controller.py`
-
-### Vehicle Dynamics
-
-The vehicle is propagated using a kinematic bicycle model.
-
-The current state representation includes:
-
-* longitudinal position
-* lateral position
-* heading
-* velocity
-
-Vehicle geometry is also used for collision detection.
-
-**Implementation:** `src/vehicle_dynamics.py`
-
-### Simulation & Visualisation
-
-The system executes the complete stack in a closed loop and generates animated GIFs showing the vehicle and surrounding traffic.
-
-**Implementation:** `src/visualizer.py`
-
----
+----------
 
 ## Demonstrations
 
-### USA US-101 — Highway Scenario
+The simulations below show the current system operating on CommonRoad scenarios.
 
-The USA scenario demonstrates highway driving with gap search, lane selection and lane-change behaviour while maintaining longitudinal safety.
+### USA US-101
 
-![USA US-101 scenario](assets/usa_us101_radar_cbf.gif)
+Highway driving with perception, behavior planning, lane changes, and safety-critical longitudinal control.
 
-### ZAM Zip-Merge Scenario
+![USA US-101 scenario](assets/usa_us101.gif)
 
-The ZAM scenario demonstrates trajectory following and longitudinal safety control in a merging environment.
+### ZAM Zip-Merge
 
-![ZAM Zip-Merge scenario](assets/zam_zip_radar_cbf.gif)
+Merging behavior with trajectory tracking and longitudinal safety control.
 
-These scenarios represent the **nominal baseline** of the system. Future experiments will introduce increasingly realistic sources of uncertainty into the perception and control pipeline.
+![ZAM Zip-Merge scenario](assets/zam_zip32_merge.gif)
 
----
+----------
 
-## Repository Structure
+## Current Implementation
 
-```text
-commonroad_cbf/
-│
-├── scenarios/
-│   ├── USA_US101-9_1_T-1.xml
-│   ├── ZAM_Zip-1_32_I-1-1.xml
-│   └── ZAM_Zip-1_64_T-1.xml
-│
-├── src/
-│   ├── behavior_planner.py
-│   ├── cbf_solver.py
-│   ├── lateral_controller.py
-│   ├── radar.py
-│   ├── scenario_loader.py
-│   ├── utils.py
-│   ├── vehicle_dynamics.py
-│   └── visualizer.py
-│
-├── run_usa.py
-├── run_zam.py
-├── requirements.txt
-└── README.md
-```
+### Perception
 
----
+The perception layer currently includes simulated **radar and ultrasonic sensors** for detecting surrounding obstacles.
 
-## Installation
+The sensor layer is separated from the rest of the stack so that different sensing assumptions can be introduced without changing the downstream planning and control logic.
 
-### Prerequisites
+### Behavior Planning
 
-* Python 3.9+
-* `pip`
-* CommonRoad-compatible Python environment
+A finite-state behavior planner handles high-level driving behavior, including lane keeping, gap search, and lane changes.
 
-### Clone the repository
+### Safety-Critical Control
+
+Longitudinal control uses a **Control Barrier Function (CBF) formulated as a Quadratic Program**, providing a safety constraint alongside the desired driving behavior.
+
+Lateral trajectory tracking uses a **Stanley controller**.
+
+----------
+
+## Installation & Running
+
+Clone the repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/shreyas-ad-dev/commonroad_cbf.git
 cd commonroad_cbf
-```
 
-### Create a virtual environment
-
-#### Linux / macOS
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-#### Windows
-
-```powershell
 python -m venv venv
-.\venv\Scripts\Activate.ps1
-```
+source venv/bin/activate
 
-### Install dependencies
-
-```bash
 pip install --upgrade pip
 pip install -r requirements.txt
+
 ```
 
----
-
-## Running the Simulations
-
-Run the scenarios from the project root.
-
-### USA US-101
+Run a scenario:
 
 ```bash
-python run_usa.py
+python run_scripts/usa.py
+
 ```
 
-The simulation generates:
-
-```text
-usa_us101_radar_cbf.gif
-```
-
-### ZAM Zip-Merge
+or:
 
 ```bash
-python run_zam.py
+python run_scripts/zam32.py
+
 ```
 
-The simulation generates:
+The simulations generate animated visualisations of the resulting behavior.
 
-```text
-zam_zip_radar_cbf.gif
-```
+----------
 
----
+## Future Work
 
-## Baseline Architecture
+This repository is being developed as a foundation for studying **perception uncertainty in autonomous driving**.
 
-The current implementation intentionally uses relatively simple and interpretable components:
+Upcoming roadmap stages include:
 
-| Layer                | Current implementation |
-| -------------------- | ---------------------- |
-| Scenario             | CommonRoad             |
-| Perception           | Simplified radar model |
-| Behaviour            | Finite-state planner   |
-| Longitudinal control | CBF-QP                 |
-| Lateral control      | Stanley controller     |
-| Vehicle model        | Kinematic bicycle      |
-| Collision model      | Polygon-based geometry |
-| Visualisation        | Animated simulation    |
+-   **Sensor Suite & Object Tracking:** Developing a unified perception interface with state estimation and filtering.
+-   **Realistic Noise Models:** Introducing measurement noise, missed detections, and false positives.
+-   **Latency & Update Rates:** Simulating sensor processing delays and asynchronous sensor updates.
+-   **Uncertainty Propagation Analysis:** Evaluating how perception degradation affects downstream planning and CBF safety margins.
 
-This provides a controlled baseline from which individual components can be replaced or extended.
+The research question guiding this framework is:
 
----
+> **How much can perception degrade before the behavior and safety of the overall system begin to fail?**
 
-## Current Limitations
+----------
 
-The current system is a **simulation baseline**, rather than a complete autonomous driving stack.
+## Project Status
 
-Important simplifications include:
+**Active Development**
 
-* Perception currently operates on simulated scenario information rather than raw sensor data.
-* Sensor noise and measurement uncertainty are not currently modelled.
-* Sensor latency and missed detections are not currently modelled.
-* The vehicle is represented using a kinematic rather than dynamic model.
-* The behaviour planner is deliberately simplified.
-* The current controller assumes access to sufficiently accurate state estimates.
-* The number of evaluated scenarios is currently limited.
+Current focus is on abstracting the perception layer into a unified `SensorSuite`, developing object tracking, and refining map-topology awareness.
 
-These limitations are intentional and provide controlled starting points for future experiments.
-
----
-
-## Research Direction
-
-The repository is intended to serve as a **foundation for experiments in autonomous driving under imperfect and uncertain perception**.
-
-Possible extensions include:
-
-* sensor measurement noise
-* state-estimation and filtering
-* sensor latency
-* missed or erroneous detections
-* uncertainty-aware safety control
-* dynamic vehicle models
-* prediction of surrounding agents
-* vulnerable road-user interaction
-* motion planning under uncertainty
-
-Experimental investigations are intended to build on this baseline rather than modify the foundation unnecessarily.
-
----
-
-## Design Philosophy
-
-The project follows three principles:
-
-### 1. Modular
-
-Perception, behaviour planning, control, and vehicle dynamics are separated so that individual components can be replaced or extended.
-
-### 2. Reproducible
-
-Experiments should be executable against fixed CommonRoad scenarios with clearly defined parameters and evaluation metrics.
-
-### 3. Extensible
-
-The baseline is deliberately kept simple so that future experiments can isolate the effect of individual changes.
-
----
-
-## Status
-
-**Current status: Foundation / Baseline**
-
-The nominal closed-loop system is operational on selected CommonRoad scenarios.
-
-The next stage of development focuses on understanding how the baseline behaves when the assumptions about perfect or sufficiently accurate perception are relaxed.
-
----
+----------
 
 ## References
 
-* Notomista, G. Wang, M. Schwager, M. & Egerstedt, M. — *Enhancing Game-Theoretic Autonomous Car Racing Using Control Barrier Functions*, ICRA 2020
-* Ames, A. D. et al. — *Control Barrier Function based Quadratic Programs for Safety Critical Systems*
-* [CommonRoad](https://commonroad.in.tum.de/)
-* [CommonRoad Documentation](https://commonroad.in.tum.de/docs/)
-
----
-
-## Author
-
-**Shreyas Rajagopal**
-
-This project is part of an ongoing exploration of autonomous driving, safety-critical control, perception, and motion planning.
+-   [CommonRoad](https://commonroad.in.tum.de/)
+-   Ames et al., _Control Barrier Function based Quadratic Programs for Safety Critical Systems_
+-   Notomista et al., _Enhancing Game-Theoretic Autonomous Car Racing Using Control Barrier Functions_
 
