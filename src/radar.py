@@ -1,13 +1,18 @@
-# src/radar.py
+from typing import Any
 import numpy as np
+from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
 
-class RadarSensor:
+
+class RadarSensor(BaseSensor):
     """
     Simulates a body-frame aligned Radar sensor with finite range and Field of View (FOV).
 
     Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations on the vehicle.
+    Inherits coordinate transformations from BaseSensor and uses step-caching to avoid
+    redundant FOV checks across controller, behavior planner, and visualizer calls.
     """
+
     def __init__(self,
                  range_max: float = 70.0,
                  fov_deg: float = 60.0,
@@ -23,40 +28,19 @@ class RadarSensor:
         Raises:
             ValueError: If mount_position is not 'front' or 'rear'.
         """
-       
         if mount_position not in ["front", "rear"]:
             raise ValueError("mount_position must be either 'front' or 'rear'")
 
-        self.range_max = range_max
-        self.fov_deg = fov_deg
+        super().__init__(range_max=range_max, fov_deg=fov_deg)
         self.mount_position = mount_position
-        self.half_fov_rad = np.radians(fov_deg / 2.0)
 
-    def to_local_frame(self,
-                       ego: EgoState,
-                       obs_x: float,
-                       obs_y: float) -> np.ndarray:
-        """
-        Transforms world coordinates into Ego's body-fixed local frame.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obs_x (float): Target X coordinate in global world frame.
-            obs_y (float): Target Y coordinate in global world frame.
-
-        Returns:
-            np.ndarray: A 2D vector [x_local, y_local] in Ego's body-fixed frame.
-        """
-       
-        # [dx, dy]
-        d_vec = np.array([obs_x, obs_y]) - ego.position
-
-        # dx * cos_a + dy * sin_a
-        x_local = np.dot(d_vec, ego.heading_vector)
-        # -dx * sin_a + dy * cos_a
-        y_local = np.dot(d_vec, ego.normal_vector) 
-
-        return np.array([x_local, y_local])
+        # Stateful internal cache
+        self._last_step: int | None = None
+        self._scan_cache: dict[str, Any] = {
+            "detected_ids": set(),
+            "fov_data": {},  # Maps obs_id -> (in_fov, dist, x_local, y_local)
+            "lead_target": None
+        }
 
     def is_in_fov(self,
                   ego: EgoState,
@@ -77,61 +61,96 @@ class RadarSensor:
                 - x_local (float): Target longitudinal offset in Ego local frame.
                 - y_local (float): Target lateral offset in Ego local frame.
         """
-
         pos_local = self.to_local_frame(ego, obs_x, obs_y)
-        dist = float(np.linalg.norm(pos_local))
+        x_local, y_local = pos_local[0], pos_local[1]
+        dist = float(np.hypot(x_local, y_local))
 
         if dist > self.range_max:
-            return False, dist, pos_local[0], pos_local[1]
+            return False, dist, x_local, y_local
 
         # Longitudinal direction constraint based on mounting point
-        if self.mount_position == "front" and pos_local[0] <= 0.0:
-            return False, dist, pos_local[0], pos_local[1]
-        elif self.mount_position == "rear" and pos_local[0] >= 0.0:
-            return False, dist, pos_local[0], pos_local[1]
+        if self.mount_position == "front" and x_local <= 0.0:
+            return False, dist, x_local, y_local
+        elif self.mount_position == "rear" and x_local >= 0.0:
+            return False, dist, x_local, y_local
 
         # Measure relative azimuth angle from sensor bore-axis
-        sensor_x = pos_local[0] if self.mount_position == "front" else -pos_local[0]
-        angle = np.arctan2(pos_local[1], sensor_x)
+        sensor_x = x_local if self.mount_position == "front" else -x_local
+        angle = np.arctan2(y_local, sensor_x)
 
         in_fov = abs(angle) <= self.half_fov_rad
-        return in_fov, dist, pos_local[0], pos_local[1]
+        return in_fov, dist, x_local, y_local
 
-    def track_lead_vehicle(self, 
-                           ego: EgoState,
-                           obstacles: list, 
-                           step: int, 
-                           lane_corridor_width: float = 2.5,
-                           target_offset: float = 0.0,
-                           road_heading: float | None = None,
-                           is_changing_lane: bool = False) -> tuple[float, float, float, object, float] | None:
+    def scan(self,
+             ego: EgoState,
+             obstacles: list,
+             step: int) -> dict[str, Any]:
         """
-        Scans vehicles in Ego's FOV cone and tracks the closest lead target.
-
-        Uses road_heading (if provided) for lane corridor alignment to prevent vehicle 
-        orientation during diagonal maneuvers from misclassifying target lane traffic.
+        Executes single-pass FOV perception evaluations and updates step cache.
 
         Args:
             ego (EgoState): Current state of the Ego vehicle.
-            obstacles (list): List of surrounding dynamic obstacle objects.
+            obstacles (list): List of dynamic obstacle objects.
             step (int): Current simulation time step index.
-            lane_corridor_width (float, optional): Total width of lane corridor to monitor. Defaults to 2.5.
-            target_offset (float, optional): Lateral offset to target lane. Defaults to 0.0.
-            road_heading (float | None, optional): Reference road angle in radians. Defaults to None.
-            is_changing_lane (bool, optional): Whether Ego is currently executing a lane change. Defaults to False.
 
         Returns:
-            tuple[float, float, float, object, float] | None: Tuple of (x, y, velocity, obstacle_id, x_local)
-            for the lead vehicle, or None if no vehicle is tracked.
+            dict[str, Any]: Reference to internal scan cache containing:
+                - 'detected_ids': set[int] of detected obstacle IDs.
+                - 'fov_data': dict[int, tuple] mapping ID to (in_fov, dist, x_local, y_local).
+        """
+        if self._last_step != step:
+            self._last_step = step
+            detected_ids: set[int] = set()
+            fov_data: dict[int, tuple[bool, float, float, float]] = {}
+
+            for obs in obstacles:
+                st = obs.state_at_time(step)
+                if st is None:
+                    continue
+
+                ox, oy = st.position[0], st.position[1]
+                in_fov, dist, x_local, y_local = self.is_in_fov(ego, ox, oy)
+
+                fov_data[obs.obstacle_id] = (in_fov, dist, x_local, y_local)
+                if in_fov:
+                    detected_ids.add(obs.obstacle_id)
+
+            self._scan_cache = {
+                "detected_ids": detected_ids,
+                "fov_data": fov_data,
+                "lead_target": None
+            }
+
+        return self._scan_cache
+
+    def get_detected_obstacle_ids(self,
+                                  ego: EgoState,
+                                  obstacles: list,
+                                  step: int) -> set[int]:
+        """Gets cached set of obstacle IDs that fall within this radar's FOV at the given step."""
+        return self.scan(ego, obstacles, step)["detected_ids"]
+
+    def track_lead_vehicle(self,
+                           ego: EgoState,
+                           obstacles: list,
+                           step: int,
+                           lane_corridor_width: float = 2.5,
+                           target_offset: float = 0.0,
+                           road_heading: float | None = None,
+                           is_changing_lane: bool = False) -> tuple[float, float, float, int, float] | None:
+        """
+        Scans vehicles in Ego's FOV cone and tracks the closest lead target.
+
+        Uses cached FOV evaluation results to eliminate redundant coordinate transformations.
         """
         if self.mount_position != "front":
             return None
 
+        scan_res = self.scan(ego, obstacles, step)
         closest_dist = self.range_max
         lead_target = None
         half_corridor = lane_corridor_width / 2.0
 
-        # Reference orientation for lane projection (use road angle if turning)
         if road_heading is not None:
             u_road = np.array([np.cos(road_heading), np.sin(road_heading)])
             n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
@@ -139,37 +158,29 @@ class RadarSensor:
             u_road = ego.heading_vector
             n_road = ego.normal_vector
 
-
         for obs in obstacles:
             st = obs.state_at_time(step)
-            if st is None:
+            if st is None or obs.obstacle_id not in scan_res["fov_data"]:
                 continue
 
-            ox, oy = st.position[0], st.position[1]
-            
-            # 1. Sensor FOV Check
-            in_fov, dist, x_local, _ = self.is_in_fov(ego, ox, oy)
+            in_fov, dist, x_local, _ = scan_res["fov_data"][obs.obstacle_id]
             if not in_fov:
                 continue
 
-            # 2. Road-Aligned Corridor Projection
-            # dx, dy
+            # Road-aligned corridor projection
             d_vec = st.position - ego.position
-            # dx * cos_a + dy * sin_a
             long_road = np.dot(d_vec, u_road)
-            # -dx * sin_a + dy * cos_a
             lat_road = np.dot(d_vec, n_road)
-       
+
             if long_road > 0.0:  # Vehicle must be ahead along the road
                 in_current_lane = abs(lat_road) <= half_corridor
-                # Consider target lane vehicles if ego is changing lanes OR if a target offset is defined
                 in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
 
                 if in_current_lane or in_target_lane:
                     if dist < closest_dist:
                         closest_dist = dist
                         target_v = float(getattr(st, 'velocity', 15.0))
-                        lead_target = (ox, oy, target_v, obs.obstacle_id, x_local)
+                        lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, x_local)
 
         return lead_target
 
@@ -183,24 +194,7 @@ class RadarSensor:
                                road_heading: float | None = None,
                                rear_radar: "RadarSensor | None" = None,
                                lane_tolerance: float = 1.8) -> bool:
-        """
-        Evaluates whether an adjacent lane target gap is clear using front and rear radars.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            surrounding_obstacles (list): List of dynamic obstacles in the scene.
-            step (int): Current simulation time step index.
-            target_lane_offset (float): Lateral offset to target lane (+ for left, - for right).
-            safety_gap_front (float, optional): Longitudinal safety buffer ahead in meters. Defaults to 12.0.
-            safety_gap_rear (float, optional): Longitudinal safety buffer behind in meters. Defaults to 10.0.
-            road_heading (float | None, optional): Reference road angle in radians. Defaults to None.
-            rear_radar (RadarSensor | None, optional): Rear-facing radar sensor instance. Defaults to None.
-            lane_tolerance (float, optional): Half-width tolerance for lane boundary matching. Defaults to 1.8.
-
-        Returns:
-            bool: True if target adjacent lane safety corridor is completely clear.
-        """
-
+        """Evaluates whether an adjacent lane target gap is clear using front and rear radars."""
         if road_heading is not None:
             u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
             n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
@@ -208,58 +202,29 @@ class RadarSensor:
             u_hat = ego.heading_vector
             n_hat = ego.normal_vector
 
+        front_scan = self.scan(ego, surrounding_obstacles, step)
+        rear_scan = rear_radar.scan(ego, surrounding_obstacles, step) if rear_radar is not None else None
+
         for obs in surrounding_obstacles:
             st = obs.state_at_time(step)
             if st is None:
                 continue
 
-            ox, oy = st.position[0], st.position[1]
-
-            # Obstacle must be detected by either front OR rear radar
-            in_front_fov, _, _, _ = self.is_in_fov(ego, ox, oy)
-            
-            in_rear_fov = rear_radar.is_in_fov(ego, ox, oy)[0] if rear_radar is not None else False
+            obs_id = obs.obstacle_id
+            in_front_fov = front_scan["fov_data"].get(obs_id, (False,))[0]
+            in_rear_fov = rear_scan["fov_data"].get(obs_id, (False,))[0] if rear_scan else False
 
             if not (in_front_fov or in_rear_fov):
                 continue
 
-            # Vector from Ego to Obstacle projected into Ego frame
             d_vec = st.position - ego.position
             longitudinal_dist = np.dot(d_vec, u_hat)
             lateral_dist = np.dot(d_vec, n_hat)
 
-            # 1. Check if obstacle is inside or close to target lane
             is_in_target_lane = abs(lateral_dist - target_lane_offset) <= lane_tolerance
-            # 2. Check if obstacle falls within longitudinal safety window
             is_in_safety_window = -safety_gap_rear <= longitudinal_dist <= safety_gap_front
+            
             if is_in_target_lane and is_in_safety_window:
-                    return False
+                return False
 
         return True
-
-    def get_detected_obstacle_ids(self,
-                                  ego: EgoState,
-                                  obstacles: list,
-                                  step: int) -> set:
-        """
-        Gets the set of obstacle IDs that fall within this radar's FOV at the given step.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacles (list): List of dynamic obstacle objects.
-            step (int): Current simulation time step index.
-
-        Returns:
-            set: Set of detected obstacle IDs.
-        """
-
-        detected_ids = set()
-        for obs in obstacles:
-            st = obs.state_at_time(step)
-            if st is None:
-                continue
-            ox, oy = st.position[0], st.position[1]
-            in_fov, _, _, _ = self.is_in_fov(ego, ox, oy)
-            if in_fov:
-                detected_ids.add(obs.obstacle_id)
-        return detected_ids
