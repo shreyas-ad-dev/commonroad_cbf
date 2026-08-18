@@ -1,13 +1,15 @@
-# src/ultrasonic.py
+from typing import Any
 import numpy as np
-from typing import Tuple, Optional, Set
-from src.ego_state import EgoState, get_car_polygon
+from src.base_sensor import BaseSensor
+from src.ego_state import EgoState
 
-class SideUltrasonicSensor:
+
+class SideUltrasonicSensor(BaseSensor):
     """
     Simulates short-range side-facing ultrasonic sensors (USS) for blind-spot monitoring.
 
     Mount positions can be 'left' (+90 deg) or 'right' (-90 deg) relative to the Ego body frame.
+    Uses stateful step-caching to guarantee single-pass FOV evaluations per frame.
     """
 
     def __init__(self,
@@ -25,13 +27,19 @@ class SideUltrasonicSensor:
         Raises:
             ValueError: If side is not 'left' or 'right'.
         """
-
         if side not in ["left", "right"]:
             raise ValueError("side must be either 'left' or 'right'")
-        self.range_max = range_max
-        self.fov_deg = fov_deg
+
+        super().__init__(range_max=range_max, fov_deg=fov_deg)
         self.side = side
-        self.half_fov_rad = np.radians(fov_deg / 2.0)
+
+        # Stateful internal cache
+        self._last_step: int | None = None
+        self._scan_cache: dict[str, Any] = {
+            "detected_ids": set(),
+            "min_distances": {},
+            "target_clearance": {}
+        }
 
     def is_in_fov(self,
                   ego: EgoState,
@@ -50,104 +58,89 @@ class SideUltrasonicSensor:
                 - any_corner_in_fov (bool): True if any corner or center of obstacle is in FOV.
                 - min_dist (float): Minimum Euclidean distance from Ego position to obstacle points.
         """
-
-        st = obstacle.state_at_time(step)
-        if st is None:
+        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
+        if eval_data is None:
             return False, float('inf')
 
-#        if target_offset != 0.0:
-#            d_center = st.position - ego.position
-#            y_center_local = np.dot(d_center, ego.normal_vector)
-#            if abs(y_center_local - target_offset) > lane_tolerance:
-#                return False, float('inf')
-
-        # Extract length and width of the obstacle
-        l = getattr(obstacle.obstacle_shape, "length", 4.5)
-        w = getattr(obstacle.obstacle_shape, "width", 2.0)
-        ox, oy = st.position[0], st.position[1]
-        o_orient = getattr(st, "orientation", 0.0)
-
-        # Get the 4 corner points of the obstacle vehicle
-        _, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
-
+        _, local_points = eval_data
         min_dist = float('inf')
         any_corner_in_fov = False
 
-        # Check center + all 4 corners
-        points_to_check = [st.position] + list(obs_corners)
-
-        for pt in points_to_check:
-            d_vec = pt - ego.position
-            x_local = np.dot(d_vec, ego.heading_vector)
-            y_local = np.dot(d_vec, ego.normal_vector)
+        for pt in local_points:
+            x_local, y_local = pt[0], pt[1]
             dist = float(np.hypot(x_local, y_local))
 
             if dist < min_dist:
                 min_dist = dist
 
             if dist <= self.range_max:
-                # Side check
+                # Side alignment filter
                 if (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0):
                     sensor_y = y_local if self.side == "left" else -y_local
                     angle = np.arctan2(x_local, sensor_y)
                     if abs(angle) <= self.half_fov_rad:
-                        #if target_offset == 0.0 or abs(y_local - target_offset) <= (lane_tolerance + w /2.0):
                         any_corner_in_fov = True
 
         return any_corner_in_fov, min_dist
 
-    def get_detected_obstacle_ids(self,
-                                  ego: EgoState,
-                                  obstacles: list,
-                                  step: int) -> Set:
+    def scan(self,
+             ego: EgoState,
+             obstacles: list,
+             step: int,
+             target_offset: float = 0.0) -> dict[str, Any]:
         """
-        Queries obstacle IDs currently residing inside this sensor's blind-spot FOV.
+        Executes perception checks and updates instance-level cache if step has changed.
 
         Args:
             ego (EgoState): Current state of the Ego vehicle.
             obstacles (list): List of dynamic obstacle objects.
             step (int): Current simulation time step index.
+            target_offset (float, optional): Lateral lane offset to assess clearance. Defaults to 0.0.
 
         Returns:
-            Set: Set of obstacle IDs detected within the FOV cone.
+            dict[str, Any]: Reference to the internal sensor scan state cache.
         """
+        # If new step, perform primary scan and wipe stale cache
+        if self._last_step != step:
+            self._last_step = step
+            detected_ids: set[int] = set()
+            min_distances: dict[int, float] = {}
 
-        detected_ids = set()
-        for obs in obstacles:
-            st = obs.state_at_time(step)
-            if st is None:
-                continue
-            ox, oy = st.position[0], st.position[1]
-            in_fov, _ = self.is_in_fov(ego, obs, step)
-            if in_fov:
-                detected_ids.add(obs.obstacle_id)
-        return detected_ids
+            for obs in obstacles:
+                in_fov, min_dist = self.is_in_fov(ego, obs, step)
+                if in_fov:
+                    detected_ids.add(obs.obstacle_id)
+                    min_distances[obs.obstacle_id] = min_dist
+
+            self._scan_cache = {
+                "detected_ids": detected_ids,
+                "min_distances": min_distances,
+                "target_clearance": {}
+            }
+
+        # Sub-check: Memoize clearance evaluation for target_offset in current step
+        if target_offset not in self._scan_cache["target_clearance"]:
+            if (target_offset > 0 and self.side != "left") or (target_offset < 0 and self.side != "right"):
+                is_clear = True
+            else:
+                is_clear = len(self._scan_cache["detected_ids"]) == 0
+
+            self._scan_cache["target_clearance"][target_offset] = is_clear
+
+        return self._scan_cache
+
+    def get_detected_obstacle_ids(self,
+                                  ego: EgoState,
+                                  obstacles: list,
+                                  step: int) -> set[int]:
+        """Returns cached set of detected obstacle IDs for current step."""
+        return self.scan(ego, obstacles, step)["detected_ids"]
 
     def is_adjacent_lane_clear(self,
                                ego: EgoState,
                                obstacles: list,
                                step: int,
                                target_offset: float) -> bool:
-        """
-        Evaluates whether the side blind spot is clear of obstacles in the target direction.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacles (list): List of dynamic obstacles in the scene.
-            step (int): Current simulation time step index.
-            target_offset (float): Target lateral offset (> 0 for left change, < 0 for right change).
-
-        Returns:
-            bool: True if the targeted side blind spot has no detected obstacles.
-        """
-
-        # Ignore check if target offset direction does not match sensor mounting side
-
-        if (target_offset > 0 and self.side != "left") or (target_offset < 0 and self.side != "right"):
-            return True
-
-        # Query tracked obstacle IDs in USS field of view
-        detected_ids = self.get_detected_obstacle_ids(ego, obstacles, step)
-        
-        # Lane is clear only if zero obstacles occupy the side blind spot
-        return len(detected_ids) == 0
+        """Returns cached lane clearance bool for given target offset and current step."""
+        cache = self.scan(ego, obstacles, step, target_offset=target_offset)
+        return cache["target_clearance"][target_offset]
