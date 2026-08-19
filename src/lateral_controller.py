@@ -12,13 +12,12 @@ def get_road_heading_at_position(scenario, position) -> float:
     # Find lanelet(s) containing or closest to the position
     lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([position])[0]
     
-    if not lanelet_ids:
+    if not lanelet_ids or not lanelet_ids[0]:
+        return None
+
         # Fallback to absolute nearest lanelet if strictly outside boundaries
-        lanelet = scenario.lanelet_network.find_lanelet_by_id(
-            scenario.lanelet_network.find_lanelet_by_position([position])[0]
-        )
-    else:
-        lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+    primary_id = lanelet_ids[0][0] if isinstance(lanelet_ids[0], (list,tuple)) else lanelet_ids[0]
+    lanelet = scenario.lanelet_network.find_lanelet_by_id(primary_id)
 
     # Extract centerline points
     centerline = lanelet.center_vertices
