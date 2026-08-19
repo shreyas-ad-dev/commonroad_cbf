@@ -183,11 +183,10 @@ class RadarSensor(BaseSensor):
                 in_current_lane = abs(lat_road) <= half_corridor
                 in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
 
-                if in_current_lane or in_target_lane:
-                    if min_dist < closest_dist:
-                        closest_dist = min_dist
-                        target_v = float(getattr(st, 'velocity', 15.0))
-                        lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
+                if (in_current_lane or in_target_lane) and (min_dist < closest_dist):
+                    closest_dist = min_dist
+                    target_v = float(getattr(st, 'velocity', 15.0))
+                    lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
 
         return lead_target
 

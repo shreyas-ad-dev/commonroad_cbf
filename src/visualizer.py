@@ -34,9 +34,14 @@ def draw_obstacle_trajectories(
 
     for obs in obstacles:
         positions = []
-        if hasattr(obs, 'prediction') and obs.prediction is not None:
-            if hasattr(obs.prediction, 'trajectory') and obs.prediction.trajectory is not None:
-                positions = [s.position for s in obs.prediction.trajectory.state_list]
+        if (
+            hasattr(obs, 'prediction') 
+            and obs.prediction is not None
+            and hasattr(obs.prediction, 'trajectory')
+            and obs.prediction.trajectory is not None
+            ):
+            positions = [s.position for s in obs.prediction.trajectory.state_list]
+
         if not positions:
             for t in range(100):
                 st = obs.state_at_time(t)
@@ -44,6 +49,7 @@ def draw_obstacle_trajectories(
                     positions.append(st.position)
                 else:
                     break
+
         if len(positions) > 1:
             path = np.array(positions)
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
@@ -62,14 +68,14 @@ def render_frame(
         num_steps,
         frame_path,
         show_trajectories: bool = False,
-        rear_radar_range: float = None,
-        rear_radar_fov_deg: float = None,
-        front_tracked_ids: set = None,
-        rear_tracked_ids: set = None,
-        uss_range: float = None,
-        uss_fov_deg: float = None,
-        left_tracked_ids: set = None,
-        right_tracked_ids: set = None
+        rear_radar_range: float | None = None,
+        rear_radar_fov_deg: float | None = None,
+        front_tracked_ids: set[int] | None = None,
+        rear_tracked_ids: set[int] | None = None,
+        uss_range: float | None = None,
+        uss_fov_deg: float | None = None,
+        left_tracked_ids: set[int] | None = None,
+        right_tracked_ids: set[int] | None = None
         ):
     """
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
@@ -103,7 +109,7 @@ def render_frame(
     left_tracked_ids = left_tracked_ids or set()
     right_tracked_ids = right_tracked_ids or set()
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    _fig, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
 
     scenario.lanelet_network.draw(renderer)

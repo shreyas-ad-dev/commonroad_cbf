@@ -74,13 +74,12 @@ class SideUltrasonicSensor(BaseSensor):
 
             min_dist = min(min_dist, dist)
 
-            if dist <= self.range_max:
-                # Side alignment filter
-                if (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0):
-                    sensor_y = y_local if self.side == "left" else -y_local
-                    angle = np.arctan2(x_local, sensor_y)
-                    if abs(angle) <= self.half_fov_rad:
-                        any_corner_in_fov = True
+            is_side_aligned= (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0)
+            if dist <= self.range_max and is_side_aligned:
+                sensor_y = y_local if self.side == "left" else -y_local
+                angle = np.arctan2(x_local, sensor_y)
+                if abs(angle) <= self.half_fov_rad:
+                    any_corner_in_fov = True
 
         return any_corner_in_fov, min_dist
 
