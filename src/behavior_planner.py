@@ -6,7 +6,7 @@ from src.lateral_controller import (
     extract_target_lanelet_path,
     generate_lane_change_path,
 )
-
+from src.visualizer import AdjacentGapConfig
 
 class BehaviorPlanner:
     """
@@ -52,7 +52,9 @@ class BehaviorPlanner:
                     current_path,
                     rear_radar=None,
                     uss_left=None,
-                    uss_right=None):
+                    uss_right=None,
+                    road_heading: float | None = None
+                    ):
         """
         Updates the high-level behavioral state and evaluates reference trajectory paths.
 
@@ -80,16 +82,24 @@ class BehaviorPlanner:
             self.start_x = ego.x
             self.start_y = ego.y
 
+        heading = road_heading if road_heading is not None else ego.orientation
+        gap_cfg = AdjacentGapConfig(
+            target_lane_offset=self.target_offset,
+            safety_gap_front=10.0,
+            safety_gap_rear=5.0,
+            road_heading=heading
+        )
+
         if self.mode == "MAP_FOLLOW":
             updated_path = extract_target_lanelet_path(scenario, ego )
-            return self.state, updated_path
+            return self.state, updated_path, gap_cfg
 
         if self.state == "LANE_CHANGE":
-            return self.state, current_path
+            return self.state, current_path, gap_cfg
 
         distance_traveled = np.hypot(ego.x - self.start_x, ego.y - self.start_y)
         if distance_traveled < self.start_distance:
-            return self.state, current_path
+            return self.state, current_path, gap_cfg
 
         # Dual radar clearance check
         radar_clear = radar.is_adjacent_lane_clear(
@@ -102,6 +112,7 @@ class BehaviorPlanner:
                 road_heading=ego.orientation,
                 rear_radar=rear_radar
         )
+        gap_cfg.is_clear = radar_clear
 
         active_uss = uss_left if self.target_offset > 0 else uss_right
         uss_clear = active_uss.is_adjacent_lane_clear(
@@ -122,7 +133,7 @@ class BehaviorPlanner:
                 target_lane_offset=self.target_offset,
                 total_length=120.0
             )
-            return self.state, new_path
+            return self.state, new_path, gap_cfg
 
-        return self.state, current_path
+        return self.state, current_path, gap_cfg
 

@@ -29,7 +29,7 @@ SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
 GIF_NAME = "usa_us101_radar_cbf.gif"
 NUM_STEPS = 80
-DESIRED_SPEED = 16.5  # m/s
+DESIRED_SPEED = 18  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
 setup_frames_directory(FRAMES_DIR)
@@ -91,7 +91,10 @@ frame_files = []
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
     # State Machine Update
-    state, target_path = planner.update_plan(
+
+    road_heading = get_road_heading_at_position(scenario, ego.position)
+    
+    state, target_path, gap_cfg = planner.update_plan(
         scenario=scenario,
         ego=ego,
         surrounding_obstacles=surrounding_obstacles,
@@ -100,11 +103,11 @@ for step in range(NUM_STEPS):
         rear_radar=rear_radar,
         uss_left=uss_left,
         uss_right=uss_right,
-        current_path=target_path
+        current_path=target_path,
+        road_heading=road_heading
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
-    road_heading = get_road_heading_at_position(scenario, ego.position)
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
         target_offset=planner.target_offset if planner.state == "LANE_CHANGE" else 0.0,
@@ -196,7 +199,8 @@ for step in range(NUM_STEPS):
         num_steps=NUM_STEPS,
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
-        lead_target_id=lead_target_id
+        lead_target_id=lead_target_id,
+        adjacent_gap_config=gap_cfg
     )
     frame_files.append(frame_path)
 
