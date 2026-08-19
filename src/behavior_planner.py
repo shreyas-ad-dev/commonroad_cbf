@@ -1,7 +1,12 @@
 # src/behavior_planner.py
 import numpy as np
+
 from src.ego_state import EgoState
-from src.lateral_controller import (generate_lane_change_path, extract_target_lanelet_path)
+from src.lateral_controller import (
+    extract_target_lanelet_path,
+    generate_lane_change_path,
+)
+
 
 class BehaviorPlanner:
     """

@@ -1,10 +1,12 @@
-from pathlib import Path
-import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from shapely.geometry import LineString, Polygon as ShapelyPolygon, Point as ShapelyPoint
+import numpy as np
 from commonroad.visualization.mp_renderer import MPRenderer
+from matplotlib import patches
+from shapely.geometry import LineString
+from shapely.geometry import Polygon as ShapelyPolygon
+
 from src.ego_state import EgoState
+
 
 def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
     """Creates a Shapely Polygon representing a sensor wedge/cone."""

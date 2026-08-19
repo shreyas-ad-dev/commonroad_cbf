@@ -1,5 +1,7 @@
 from typing import Any
+
 import numpy as np
+
 from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
 
@@ -74,8 +76,7 @@ class RadarSensor(BaseSensor):
             x_local, y_local = pt[0], pt[1]
             dist = float(np.hypot(x_local, y_local))
 
-            if dist < min_dist:
-                min_dist = dist
+            min_dist = min(min_dist, dist)
 
             if dist <= self.range_max:
                 # Direction constraint based on mounting orientation

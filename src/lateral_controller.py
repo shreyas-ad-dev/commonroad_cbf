@@ -1,6 +1,8 @@
-from scipy.interpolate import interp1d
 import numpy as np
+from scipy.interpolate import interp1d
+
 from src.ego_state import EgoState
+
 
 def get_road_heading_at_position(scenario, position) -> float:
     """

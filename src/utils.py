@@ -1,7 +1,8 @@
 # src/utils.py
 from pathlib import Path
-from typing import List
+
 from PIL import Image
+
 
 def setup_frames_directory(frames_dir: Path) -> None:
     """
@@ -38,7 +39,7 @@ def create_gif_from_frames(
     )
 
 def build_gif_and_cleanup(
-        frame_files: List[Path],
+        frame_files: list[Path],
         gif_path: Path, dt: float) -> None:
     """
     Generates a GIF animation from frame files and purges temporary frame images and folders.

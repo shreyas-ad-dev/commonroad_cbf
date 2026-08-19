@@ -1,6 +1,8 @@
 from pathlib import Path
+
 import numpy as np
 from commonroad.common.file_reader import CommonRoadFileReader
+
 
 def load_scenario_and_ego(xml_path: Path):
     """
