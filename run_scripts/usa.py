@@ -113,9 +113,11 @@ for step in range(NUM_STEPS):
     )
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
+    lead_target_id = None
 
     if lead_target is not None and not has_collided:
         target_x, target_y, target_v, target_id, x_local = lead_target
+        lead_target_id = target_id
         h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
 
         u_control = cbf_solver.solve(
@@ -194,6 +196,7 @@ for step in range(NUM_STEPS):
         num_steps=NUM_STEPS,
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
+        lead_target_id=lead_target_id
     )
     frame_files.append(frame_path)
 

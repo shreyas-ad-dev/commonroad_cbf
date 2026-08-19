@@ -75,7 +75,8 @@ def render_frame(
         uss_range: float | None = None,
         uss_fov_deg: float | None = None,
         left_tracked_ids: set[int] | None = None,
-        right_tracked_ids: set[int] | None = None
+        right_tracked_ids: set[int] | None = None,
+        lead_target_id: int | None = None
         ):
     """
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
@@ -251,6 +252,25 @@ def render_frame(
         obs_id = obs.obstacle_id
         obs_color = "#E67E22" if is_hit else "#1F77B4"
 
+        if lead_target_id is not None and obs.obstacle_id == lead_target_id:
+            obs_state = obs.state_at_time(step)
+            if obs_state is not None:
+                pos = obs_state.position
+                ax.plot(pos[0], pos[1], marker="X", markersize=10, color="red", zorder=105)
+#                ax.text(
+#                    pos[0],
+#                    pos[1] + 2.5,
+#                    "LEAD",
+#                    color="red",
+#                    fontsize=10,
+#                    fontweight="bold",
+#                    ha="center",
+#                    va="bottom",
+#                    bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.8),
+#                    zorder=100
+#                )
+
+
         obs_poly_shapely = ShapelyPolygon(corners)
         ax.add_patch(patches.Polygon(
             corners, closed=True, 
@@ -328,6 +348,9 @@ def render_frame(
         ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
     if uss_range is not None and uss_fov_deg is not None:
         ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_range:.0f}m, {uss_fov_deg:.0f}°)")
+
+    if lead_target_id is not None:
+        ax.plot([], [], color="red", marker="X", ls="", markersize=9, label="Lead Target Vehicle")
 
     if front_tracked_ids:
         ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")
