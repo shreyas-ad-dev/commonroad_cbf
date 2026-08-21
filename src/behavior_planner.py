@@ -54,7 +54,6 @@ class BehaviorPlanner:
                     rear_radar=None,
                     uss_left=None,
                     uss_right=None,
-                    road_heading: float | None = None
                     ):
         """
         Updates the high-level behavioral state and evaluates reference trajectory paths.
@@ -83,12 +82,10 @@ class BehaviorPlanner:
             self.start_x = ego.x
             self.start_y = ego.y
 
-        heading = road_heading if road_heading is not None else ego.orientation
         gap_cfg = AdjacentGapConfig(
                 target_lane_offset=self.target_offset,
                 safety_gap_front=10.0,
                 safety_gap_rear=8.0,
-                road_heading=heading
             )
 
         if self.mode == "MAP_FOLLOW":
@@ -96,7 +93,7 @@ class BehaviorPlanner:
             return self.state, updated_path, gap_cfg 
 
         if self.state == "LANE_CHANGE":
-            n_road = np.array([-np.sin(heading), np.cos(heading)])
+            _, n_road = ego.road_frame_vectors
             disp_vec = ego.position - self.lane_change_start_pos
             lat_progress = np.dot(disp_vec, n_road)
             
@@ -123,7 +120,6 @@ class BehaviorPlanner:
                 self.target_offset,
                 safety_gap_front=10.0,
                 safety_gap_rear=8.0,
-                road_heading=ego.orientation,
                 rear_radar=rear_radar
         )
         gap_cfg.is_clear = radar_clear
@@ -143,8 +139,7 @@ class BehaviorPlanner:
             self.lane_change_start_pos = ego.position.copy()
             print(f" [Step {step} | Dist: {distance_traveled:.1f}m] Gap clear! Initiating dynamic lane change.")
             new_path = generate_lane_change_path(
-                start_pos=ego.position,
-                road_heading=ego.orientation,
+                ego=ego,
                 target_lane_offset=self.target_offset,
                 total_length=120.0
             )

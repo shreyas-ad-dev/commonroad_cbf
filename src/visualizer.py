@@ -14,7 +14,6 @@ class AdjacentGapConfig:
     safety_gap_front: float = 10.0
     safety_gap_rear: float = 12.0
     lane_tolerance: float = 1.8
-    road_heading: float | None = None
     is_clear: bool | None = None
 
 
@@ -237,9 +236,10 @@ def render_frame(
         # Adjacent lane radar check zone
         if adjacent_gap_config is not None:
             cfg = adjacent_gap_config
-            heading = cfg.road_heading if cfg.road_heading is not None else ego.orientation
-            u_hat = np.array([np.cos(heading), np.sin(heading)])
-            n_hat = np.array([-np.sin(heading), np.cos(heading)])
+           # heading = cfg.road_heading if cfg.road_heading is not None else ego.orientation
+           # u_hat = np.array([np.cos(heading), np.sin(heading)])
+           # n_hat = np.array([-np.sin(heading), np.cos(heading)])
+            u_hat, n_hat = ego.road_frame_vectors
             lat_min = cfg.target_lane_offset - cfg.lane_tolerance
             lat_max = cfg.target_lane_offset + cfg.lane_tolerance
             long_min = -cfg.safety_gap_rear
