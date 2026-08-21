@@ -143,7 +143,6 @@ class RadarSensor(BaseSensor):
                            step: int,
                            lane_corridor_width: float = 2.5,
                            target_offset: float = 0.0,
-                           road_heading: float | None = None,
                            ) -> tuple[float, float, float, int, float] | None:
         """
         Scans vehicles in Ego's FOV cone and tracks the closest lead target.
@@ -157,13 +156,14 @@ class RadarSensor(BaseSensor):
         closest_dist = self.range_max
         lead_target = None
         half_corridor = lane_corridor_width / 2.0
+        u_road, n_road = ego.road_frame_vectors
 
-        if road_heading is not None:
-            u_road = np.array([np.cos(road_heading), np.sin(road_heading)])
-            n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
-        else:
-            u_road = ego.heading_vector
-            n_road = ego.normal_vector
+  #      if road_heading is not None:
+  #          u_road = np.array([np.cos(road_heading), np.sin(road_heading)])
+  #          n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+  #      else:
+  #          u_road = ego.heading_vector
+  #          n_road = ego.normal_vector
 
         for obs in obstacles:
             st = obs.state_at_time(step)
@@ -208,16 +208,17 @@ class RadarSensor(BaseSensor):
                                target_lane_offset: float,
                                safety_gap_front: float = 12.0,
                                safety_gap_rear: float = 10.0,
-                               road_heading: float | None = None,
                                rear_radar: "RadarSensor | None" = None,
                                lane_tolerance: float = 1.8) -> bool:
         """Evaluates whether an adjacent lane target gap is clear using front and rear radars."""
-        if road_heading is not None:
-            u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
-            n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
-        else:
-            u_hat = ego.heading_vector
-            n_hat = ego.normal_vector
+        #if road_heading is not None:
+        #    u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
+        #    n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        #else:
+        #    u_hat = ego.heading_vector
+        #    n_hat = ego.normal_vector
+
+        u_hat, n_hat = ego.road_frame_vectors
 
         front_scan = self.scan(ego, surrounding_obstacles, step)
         rear_scan = rear_radar.scan(ego, surrounding_obstacles, step) if rear_radar is not None else None

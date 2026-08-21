@@ -92,7 +92,7 @@ frame_files = []
 for step in range(NUM_STEPS):
     # State Machine Update
 
-    road_heading = get_road_heading_at_position(scenario, ego.position)
+    ego.road_heading = get_road_heading_at_position(scenario, ego.position)
     
     state, target_path, gap_cfg = planner.update_plan(
         scenario=scenario,
@@ -104,12 +104,11 @@ for step in range(NUM_STEPS):
         uss_left=uss_left,
         uss_right=uss_right,
         current_path=target_path,
-        road_heading=road_heading
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
     if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
-        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        _, n_road = ego.road_frame_vectors
         lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
         remaining_offset = planner.target_offset - lat_progress
         eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
@@ -119,7 +118,6 @@ for step in range(NUM_STEPS):
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
         target_offset=eval_offset,
-        road_heading=road_heading
     )
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)

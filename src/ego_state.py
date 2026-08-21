@@ -64,6 +64,7 @@ class EgoState:
     length: float       # Vehicle length in meters
     width: float        # Vehicle width in meters
     wheelbase: float
+    road_heading: float | None = None
 
     # -------------------------------------------------------------------------
     # Properties & Vector Helpers
@@ -107,6 +108,16 @@ class EgoState:
             np.ndarray: 2D velocity vector [vx, vy] in world coordinates.
         """
         return self.velocity * self.heading_vector
+
+    @property
+    def road_frame_vectors(self) -> tuple[np.ndarray, np.ndarray]:
+        if self.road_heading is not None:
+            return (
+                    np.array([np.cos(self.road_heading), np.sin(self.road_heading)]),
+                    np.array([-np.sin(self.road_heading), np.cos(self.road_heading)])
+                    )
+        return self.heading_vector, self.normal_vector
+
 
     @property
     def front_axle_position(self) -> np.ndarray:
