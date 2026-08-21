@@ -18,7 +18,7 @@ from src.scenario_loader import load_scenario_and_ego
 from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
 from src.visualizer import render_frame
-
+import numpy as np
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
@@ -100,9 +100,19 @@ for step in range(NUM_STEPS):
 
     # Lead Tracking via Radar
     road_heading = get_road_heading_at_position(scenario, ego.position)
+    
+    if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
+        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
+        remaining_offset = planner.target_offset - lat_progress
+        eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
+    else:
+        # In MAP_FOLLOW / LANE_KEEP: track vehicles directly in current lane
+        eval_offset = 0.0
+
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
-        target_offset=lane_width,
+        target_offset=eval_offset,
         road_heading=road_heading
     )
 
