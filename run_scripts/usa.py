@@ -5,30 +5,30 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-import numpy as np
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
 from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
+    extract_target_lanelet_path,
     get_current_lane_width,
     get_road_heading_at_position,
-    extract_target_lanelet_path
 )
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
 from src.ultrasonic import SideUltrasonicSensor
-from src.utils import setup_frames_directory, build_gif_and_cleanup
+from src.utils import build_gif_and_cleanup, setup_frames_directory
+
 #from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame
-
+import numpy as np
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
 GIF_NAME = "usa_us101_radar_cbf.gif"
-NUM_STEPS = 80
+NUM_STEPS = 100
 DESIRED_SPEED = 16.5  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
@@ -91,7 +91,10 @@ frame_files = []
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
     # State Machine Update
-    state, target_path = planner.update_plan(
+
+    road_heading = get_road_heading_at_position(scenario, ego.position)
+    
+    state, target_path, gap_cfg = planner.update_plan(
         scenario=scenario,
         ego=ego,
         surrounding_obstacles=surrounding_obstacles,
@@ -100,22 +103,31 @@ for step in range(NUM_STEPS):
         rear_radar=rear_radar,
         uss_left=uss_left,
         uss_right=uss_right,
-        current_path=target_path
+        current_path=target_path,
+        road_heading=road_heading
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
-    road_heading = get_road_heading_at_position(scenario, ego.position)
+    if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
+        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
+        remaining_offset = planner.target_offset - lat_progress
+        eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
+    else:
+        eval_offset = 0.0
+
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
-        target_offset=planner.target_offset if planner.state == "LANE_CHANGE" else 0.0,
-        road_heading=road_heading,
-        is_changing_lane=(planner.state == "LANE_CHANGE")
+        target_offset=eval_offset,
+        road_heading=road_heading
     )
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
+    lead_target_id = None
 
     if lead_target is not None and not has_collided:
         target_x, target_y, target_v, target_id, x_local = lead_target
+        lead_target_id = target_id
         h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
 
         u_control = cbf_solver.solve(
@@ -194,6 +206,8 @@ for step in range(NUM_STEPS):
         num_steps=NUM_STEPS,
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
+        lead_target_id=lead_target_id,
+        adjacent_gap_config=gap_cfg
     )
     frame_files.append(frame_path)
 

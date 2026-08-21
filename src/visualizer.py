@@ -1,10 +1,22 @@
-from pathlib import Path
-import numpy as np
+from dataclasses import dataclass
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from shapely.geometry import LineString, Polygon as ShapelyPolygon, Point as ShapelyPoint
+import numpy as np
 from commonroad.visualization.mp_renderer import MPRenderer
+from matplotlib import patches
+from shapely.geometry import LineString
+from shapely.geometry import Polygon as ShapelyPolygon
+
 from src.ego_state import EgoState
+
+@dataclass
+class AdjacentGapConfig:
+    target_lane_offset: float
+    safety_gap_front: float = 10.0
+    safety_gap_rear: float = 12.0
+    lane_tolerance: float = 1.8
+    road_heading: float | None = None
+    is_clear: bool | None = None
+
 
 def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
     """Creates a Shapely Polygon representing a sensor wedge/cone."""
@@ -32,9 +44,14 @@ def draw_obstacle_trajectories(
 
     for obs in obstacles:
         positions = []
-        if hasattr(obs, 'prediction') and obs.prediction is not None:
-            if hasattr(obs.prediction, 'trajectory') and obs.prediction.trajectory is not None:
-                positions = [s.position for s in obs.prediction.trajectory.state_list]
+        if (
+            hasattr(obs, 'prediction') 
+            and obs.prediction is not None
+            and hasattr(obs.prediction, 'trajectory')
+            and obs.prediction.trajectory is not None
+            ):
+            positions = [s.position for s in obs.prediction.trajectory.state_list]
+
         if not positions:
             for t in range(100):
                 st = obs.state_at_time(t)
@@ -42,6 +59,7 @@ def draw_obstacle_trajectories(
                     positions.append(st.position)
                 else:
                     break
+
         if len(positions) > 1:
             path = np.array(positions)
             ax.plot(path[:, 0], path[:, 1], color="black", linestyle=(0, (1, 2)), linewidth=1.2, zorder=zorder)
@@ -60,14 +78,16 @@ def render_frame(
         num_steps,
         frame_path,
         show_trajectories: bool = False,
-        rear_radar_range: float = None,
-        rear_radar_fov_deg: float = None,
-        front_tracked_ids: set = None,
-        rear_tracked_ids: set = None,
-        uss_range: float = None,
-        uss_fov_deg: float = None,
-        left_tracked_ids: set = None,
-        right_tracked_ids: set = None
+        rear_radar_range: float | None = None,
+        rear_radar_fov_deg: float | None = None,
+        front_tracked_ids: set[int] | None = None,
+        rear_tracked_ids: set[int] | None = None,
+        uss_range: float | None = None,
+        uss_fov_deg: float | None = None,
+        left_tracked_ids: set[int] | None = None,
+        right_tracked_ids: set[int] | None = None,
+        lead_target_id: int | None = None,
+        adjacent_gap_config: AdjacentGapConfig | None = None
         ):
     """
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
@@ -101,7 +121,7 @@ def render_frame(
     left_tracked_ids = left_tracked_ids or set()
     right_tracked_ids = right_tracked_ids or set()
 
-    fig, ax = plt.subplots(figsize=(12, 7))
+    _fig, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
 
     scenario.lanelet_network.draw(renderer)
@@ -214,6 +234,33 @@ def render_frame(
             ego.position
         ))
 
+        # Adjacent lane radar check zone
+        if adjacent_gap_config is not None:
+            cfg = adjacent_gap_config
+            heading = cfg.road_heading if cfg.road_heading is not None else ego.orientation
+            u_hat = np.array([np.cos(heading), np.sin(heading)])
+            n_hat = np.array([-np.sin(heading), np.cos(heading)])
+            lat_min = cfg.target_lane_offset - cfg.lane_tolerance
+            lat_max = cfg.target_lane_offset + cfg.lane_tolerance
+            long_min = -cfg.safety_gap_rear
+            long_max = cfg.safety_gap_front
+
+            local_box = np.array([
+                [long_min, lat_min],
+                [long_max, lat_min],
+                [long_max, lat_max],
+                [long_min, lat_max]
+            ])
+
+            adj_zone_world = ego.position + np.outer(local_box[:, 0], u_hat) + np.outer(local_box[:, 1], n_hat)
+            zone_clr = "#2ECC71" if cfg.is_clear else "#E74C3C" if cfg.is_clear is False else "#9B59B6"
+
+            ax.add_patch(patches.Polygon(
+                adj_zone_world, closed=True,
+                facecolor=zone_clr, edgecolor="#8E44AD",
+                alpha=0.30, linestyle=":", linewidth=1.8, zorder=75
+            ))
+
 
     # 3. Render CBF Safety Buffer Zone
     w2 = ego.width / 2.0
@@ -242,6 +289,25 @@ def render_frame(
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
         obs_color = "#E67E22" if is_hit else "#1F77B4"
+
+        if lead_target_id is not None and obs.obstacle_id == lead_target_id:
+            obs_state = obs.state_at_time(step)
+            if obs_state is not None:
+                pos = obs_state.position
+                ax.plot(pos[0], pos[1], marker="X", markersize=10, color="red", zorder=105)
+#                ax.text(
+#                    pos[0],
+#                    pos[1] + 2.5,
+#                    "LEAD",
+#                    color="red",
+#                    fontsize=10,
+#                    fontweight="bold",
+#                    ha="center",
+#                    va="bottom",
+#                    bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.8),
+#                    zorder=100
+#                )
+
 
         obs_poly_shapely = ShapelyPolygon(corners)
         ax.add_patch(patches.Polygon(
@@ -318,8 +384,16 @@ def render_frame(
     
     if rear_radar_range is not None and rear_radar_fov_deg is not None:
         ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
+
+    if adjacent_gap_config is not None:
+        clr_lbl = "Adjacent Gap (Clear)" if adjacent_gap_config.is_clear else "Adjacent Gap (Blocked)"
+        ax.plot([], [], color="#8E44AD", linestyle=":", linewidth=2, label=clr_lbl)
+
     if uss_range is not None and uss_fov_deg is not None:
         ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_range:.0f}m, {uss_fov_deg:.0f}°)")
+
+    if lead_target_id is not None:
+        ax.plot([], [], color="red", marker="X", ls="", markersize=9, label="Lead Target Vehicle")
 
     if front_tracked_ids:
         ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")

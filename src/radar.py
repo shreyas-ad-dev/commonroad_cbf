@@ -1,5 +1,7 @@
 from typing import Any
+
 import numpy as np
+
 from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
 
@@ -74,8 +76,7 @@ class RadarSensor(BaseSensor):
             x_local, y_local = pt[0], pt[1]
             dist = float(np.hypot(x_local, y_local))
 
-            if dist < min_dist:
-                min_dist = dist
+            min_dist = min(min_dist, dist)
 
             if dist <= self.range_max:
                 # Direction constraint based on mounting orientation
@@ -143,7 +144,7 @@ class RadarSensor(BaseSensor):
                            lane_corridor_width: float = 2.5,
                            target_offset: float = 0.0,
                            road_heading: float | None = None,
-                           is_changing_lane: bool = False) -> tuple[float, float, float, int, float] | None:
+                           ) -> tuple[float, float, float, int, float] | None:
         """
         Scans vehicles in Ego's FOV cone and tracks the closest lead target.
 
@@ -179,14 +180,24 @@ class RadarSensor(BaseSensor):
             lat_road = np.dot(d_vec, n_road)
 
             if long_road > 0.0:  # Vehicle must be ahead along the road
-                in_current_lane = abs(lat_road) <= half_corridor
-                in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
+                in_corridor = abs(lat_road - target_offset) <= half_corridor
 
-                if in_current_lane or in_target_lane:
-                    if min_dist < closest_dist:
-                        closest_dist = min_dist
-                        target_v = float(getattr(st, 'velocity', 15.0))
-                        lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
+                if in_corridor and (min_dist < closest_dist):
+                    closest_dist = min_dist
+                    target_v = float(getattr(st, 'velocity', 15.0))
+                    # Calculate bumper-to-bumper longitudinal distance offset
+                    obs_length = getattr(obs.obstacle_shape, 'length', 4.5)
+                    ego_length = ego.length
+                    bumper_x_local = max(0.1, center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
+
+                    lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, bumper_x_local)
+              #  in_current_lane = abs(lat_road) <= half_corridor
+              #  in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
+
+              #  if (in_current_lane or in_target_lane) and (min_dist < closest_dist):
+              #      closest_dist = min_dist
+              #      target_v = float(getattr(st, 'velocity', 15.0))
+              #      lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
 
         return lead_target
 

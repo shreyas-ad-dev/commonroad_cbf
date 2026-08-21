@@ -1,4 +1,3 @@
-from typing import Optional
 import numpy as np
 
 try:
@@ -159,5 +158,5 @@ class CBFQPSolver:
                 return float(u.value[0])
             else:
                 return self.a_min
-        except Exception:
+        except (ValueError, RuntimeError):
             return self.a_min
