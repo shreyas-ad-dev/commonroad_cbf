@@ -21,15 +21,15 @@ from src.utils import build_gif_and_cleanup, setup_frames_directory
 
 #from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame
-
+import numpy as np
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "USA_US101-9_1_T-1.xml"
 GIF_NAME = "usa_us101_radar_cbf.gif"
-NUM_STEPS = 80
-DESIRED_SPEED = 18  # m/s
+NUM_STEPS = 100
+DESIRED_SPEED = 16.5  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_usa"
 setup_frames_directory(FRAMES_DIR)
@@ -108,11 +108,18 @@ for step in range(NUM_STEPS):
     )
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
+    if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
+        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
+        remaining_offset = planner.target_offset - lat_progress
+        eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
+    else:
+        eval_offset = 0.0
+
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
-        target_offset=planner.target_offset if planner.state == "LANE_CHANGE" else 0.0,
-        road_heading=road_heading,
-        is_changing_lane=(planner.state == "LANE_CHANGE")
+        target_offset=eval_offset,
+        road_heading=road_heading
     )
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)

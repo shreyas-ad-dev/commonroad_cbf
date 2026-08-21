@@ -82,7 +82,7 @@ frame_files = []
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
     # State Machine Update
-    state, target_path = planner.update_plan(
+    state, target_path, gap_cfg = planner.update_plan(
         scenario=scenario,
         ego=ego,
         surrounding_obstacles=surrounding_obstacles,
@@ -103,8 +103,7 @@ for step in range(NUM_STEPS):
     lead_target = front_radar.track_lead_vehicle(
         ego, surrounding_obstacles, step,
         target_offset=lane_width,
-        road_heading=road_heading,
-        is_changing_lane=True
+        road_heading=road_heading
     )
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
@@ -185,7 +184,8 @@ for step in range(NUM_STEPS):
         num_steps=NUM_STEPS,
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
-        lead_target_id=lead_vehicle_id
+        lead_target_id=lead_vehicle_id,
+        adjacent_gap_config=gap_cfg
     )
     frame_files.append(frame_path)
 
