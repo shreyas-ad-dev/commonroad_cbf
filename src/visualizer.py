@@ -7,6 +7,7 @@ from shapely.geometry import LineString
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from src.ego_state import EgoState
+from src.sensor_suite import SensorSuite
 
 @dataclass
 class AdjacentGapConfig:
@@ -67,25 +68,26 @@ def render_frame(
         scenario,
         planning_problem_set,
         ego: EgoState,
+        sensor_suite: SensorSuite,
         d_safe,
         h_val,
-        radar_range,
-        radar_fov_deg, 
+        #radar_range,
+        #radar_fov_deg, 
         surrounding_states,
         has_collided,
         step,
         num_steps,
         frame_path,
         show_trajectories: bool = False,
-        rear_radar_range: float | None = None,
-        rear_radar_fov_deg: float | None = None,
-        front_tracked_ids: set[int] | None = None,
-        rear_tracked_ids: set[int] | None = None,
-        uss_range: float | None = None,
-        uss_fov_deg: float | None = None,
-        left_tracked_ids: set[int] | None = None,
-        right_tracked_ids: set[int] | None = None,
-        lead_target_id: int | None = None,
+        #rear_radar_range: float | None = None,
+        #rear_radar_fov_deg: float | None = None,
+        #front_tracked_ids: set[int] | None = None,
+        #rear_tracked_ids: set[int] | None = None,
+        #uss_range: float | None = None,
+        #uss_fov_deg: float | None = None,
+        #left_tracked_ids: set[int] | None = None,
+        #right_tracked_ids: set[int] | None = None,
+        #lead_target_id: int | None = None,
         adjacent_gap_config: AdjacentGapConfig | None = None
         ):
     """
@@ -115,12 +117,25 @@ def render_frame(
         right_tracked_ids (set | None, optional): Set of obstacle IDs detected by right USS. Defaults to None.
     """
 
-    front_tracked_ids = front_tracked_ids or set()
-    rear_tracked_ids = rear_tracked_ids or set()
-    left_tracked_ids = left_tracked_ids or set()
-    right_tracked_ids = right_tracked_ids or set()
+   # front_tracked_ids = front_tracked_ids or set()
+   # rear_tracked_ids = rear_tracked_ids or set()
+   # left_tracked_ids = left_tracked_ids or set()
+   # right_tracked_ids = right_tracked_ids or set()
 
-    _fig, ax = plt.subplots(figsize=(12, 7))
+    front_radar = sensor_suite.front_radar
+    rear_radar = sensor_suite.rear_radar
+    uss_left = sensor_suite.uss_left
+    uss_right = sensor_suite.uss_right
+
+    front_tracked_ids = sensor_suite.front_tracked_ids
+    rear_tracked_ids = sensor_suite.rear_tracked_ids
+    left_tracked_ids = sensor_suite.left_tracked_ids
+    right_tracked_ids = sensor_suite.right_tracked_ids
+
+    lead_target = sensor_suite.lead_target
+    lead_target_id = lead_target[3] if lead_target is not None else None
+
+    _, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
 
     scenario.lanelet_network.draw(renderer)
@@ -144,10 +159,10 @@ def render_frame(
 
 
     # 2. Render Radar and USS FOV Cone
-    front_t1, front_t2 = heading_deg - (radar_fov_deg / 2.0), heading_deg + (radar_fov_deg / 2.0)
+    front_t1, front_t2 = heading_deg - (front_radar.fov_deg / 2.0), heading_deg + (front_radar.fov_deg / 2.0)
     front_fov_wedge = patches.Wedge(
         center=front_pos,
-        r=radar_range,
+        r=front_radar.range_max,
         theta1=front_t1,
         theta2=front_t2,
         facecolor="#00E5FF",
@@ -159,18 +174,18 @@ def render_frame(
     )
     ax.add_patch(front_fov_wedge)
     sensor_polygons.append((
-        create_wedge_polygon(front_pos, radar_range, front_t1, front_t2),
+        create_wedge_polygon(front_pos, front_radar.range_max, front_t1, front_t2),
         "#00E5FF", # Highlight color for front radar
         front_tracked_ids,
         front_pos
     ))
 
-    if rear_radar_range is not None and rear_radar_fov_deg is not None:
-        rear_t1 = heading_deg + 180.0 - (rear_radar_fov_deg / 2.0)
-        rear_t2 = heading_deg + 180.0 + (rear_radar_fov_deg / 2.0)
+    if rear_radar is not None:
+        rear_t1 = heading_deg + 180.0 - (rear_radar.fov_deg / 2.0)
+        rear_t2 = heading_deg + 180.0 + (rear_radar.fov_deg / 2.0)
         rear_fov_wedge = patches.Wedge(
                 center=rear_pos,
-                r=rear_radar_range,
+                r=rear_radar.range_max,
                 theta1=rear_t1,
                 theta2=rear_t2,
                 facecolor="#AB47BC",
@@ -182,19 +197,19 @@ def render_frame(
         )
         ax.add_patch(rear_fov_wedge)
         sensor_polygons.append((
-            create_wedge_polygon(rear_pos, rear_radar_range, rear_t1, rear_t2), 
+            create_wedge_polygon(rear_pos, rear_radar.range_max, rear_t1, rear_t2), 
             "#E040FB",  # Highlight color for rear radar
             rear_tracked_ids,
             rear_pos
         ))
 
 
-    if uss_range is not None and uss_fov_deg is not None:
+    if uss_left is not None:
         # Left USS (+90 deg)
-        left_t1, left_t2 = heading_deg + 90.0 - (uss_fov_deg / 2.0), heading_deg + 90.0 + (uss_fov_deg / 2.0)
+        left_t1, left_t2 = heading_deg + 90.0 - (uss_left.fov_deg / 2.0), heading_deg + 90.0 + (uss_left.fov_deg / 2.0)
         left_wedge = patches.Wedge(
                 center=ego.position,
-                r=uss_range,
+                r=uss_left.range_max,
                 theta1=left_t1,
                 theta2=left_t2,
                 facecolor="#FFE082",
@@ -205,33 +220,34 @@ def render_frame(
         )
         ax.add_patch(left_wedge)
         sensor_polygons.append((
-            create_wedge_polygon(ego.position, uss_range, left_t1, left_t2), 
+            create_wedge_polygon(ego.position, uss_left.range_max, left_t1, left_t2), 
             "#FFB300",  # Highlight color for side USS
             left_tracked_ids,
             ego.position
         ))
 
             
-        # Right USS (-90 deg)
-        right_t1, right_t2 = heading_deg - 90.0 - (uss_fov_deg / 2.0), heading_deg - 90.0 + (uss_fov_deg / 2.0)
-        right_wedge = patches.Wedge(
-                center=ego.position,
-                r=uss_range,
-                theta1=right_t1,
-                theta2=right_t2,
-                facecolor="#FFE082",
-                alpha=0.60,
-                edgecolor="#FFA000",
-                linestyle="--",
-                zorder=70
-        )
-        ax.add_patch(right_wedge)
-        sensor_polygons.append((
-            create_wedge_polygon(ego.position, uss_range, right_t1, right_t2), 
-            "#FFB300", # Highlight color for side USS
-            right_tracked_ids,
-            ego.position
-        ))
+        if uss_right is not None:
+            # Right USS (-90 deg)
+            right_t1, right_t2 = heading_deg - 90.0 - (uss_right.fov_deg / 2.0), heading_deg - 90.0 + (uss_right.fov_deg / 2.0)
+            right_wedge = patches.Wedge(
+                    center=ego.position,
+                    r=uss_right.range_max,
+                    theta1=right_t1,
+                    theta2=right_t2,
+                    facecolor="#FFE082",
+                    alpha=0.60,
+                    edgecolor="#FFA000",
+                    linestyle="--",
+                    zorder=70
+                )
+            ax.add_patch(right_wedge)
+            sensor_polygons.append((
+                create_wedge_polygon(ego.position, uss_right.range_max, right_t1, right_t2), 
+                "#FFB300", # Highlight color for side USS
+                right_tracked_ids,
+                ego.position
+            ))
 
         # Adjacent lane radar check zone
         if adjacent_gap_config is not None:
@@ -380,17 +396,21 @@ def render_frame(
 
     ax.plot([], [], color=zone_color, linestyle="--", linewidth=1, label=f"CBF Buffer ({d_safe:.1f}m)")
 
-    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({radar_range:.0f}m, {radar_fov_deg:.0f}°)")
+    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({front_radar.range_max:.0f}m, {front_radar.fov_deg:.0f}°)")
     
-    if rear_radar_range is not None and rear_radar_fov_deg is not None:
-        ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar_range:.0f}m, {rear_radar_fov_deg:.0f}°)")
+    if rear_radar is not None:
+        ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar.range_max:.0f}m, {rear_radar.fov_deg:.0f}°)")
 
     if adjacent_gap_config is not None:
         clr_lbl = "Adjacent Gap (Clear)" if adjacent_gap_config.is_clear else "Adjacent Gap (Blocked)"
         ax.plot([], [], color="#8E44AD", linestyle=":", linewidth=2, label=clr_lbl)
 
-    if uss_range is not None and uss_fov_deg is not None:
-        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_range:.0f}m, {uss_fov_deg:.0f}°)")
+    if uss_left is not None:
+        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_left.range_max:.0f}m, {uss_left.fov_deg:.0f}°)")
+
+    if uss_right is not None:
+        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_right.range_max:.0f}m, {uss_right.fov_deg:.0f}°)")
+
 
     if lead_target_id is not None:
         ax.plot([], [], color="red", marker="X", ls="", markersize=9, label="Lead Target Vehicle")
