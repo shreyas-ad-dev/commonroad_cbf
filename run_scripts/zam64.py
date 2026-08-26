@@ -60,13 +60,6 @@ print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
 # -----------------------------------------------------------------------------
-#ego_x = ego_params["x"]
-#ego_y = ego_params["y"]
-#ego_orient = ego_params["orientation"]
-#ego_v = ego_params["velocity"]
-#ego_l = ego_params["length"]
-#ego_w = ego_params["width"]
-
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
@@ -80,7 +73,6 @@ lane_width = get_current_lane_width(scenario, ego=ego)
 #ego.y = ego.y - lane_width
 
 planner = BehaviorPlanner(mode="MAP_FOLLOW")
-#planner = BehaviorPlanner(target_offset=-lane_width)
 target_path = extract_target_lanelet_path(scenario, ego)
 
 has_collided = False
@@ -145,11 +137,6 @@ for step in range(NUM_STEPS):
         )
         ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
 
-#        L = stanley_ctrl.wheelbase
-#        ego_v = max(0.0, ego_v + u_control * scenario.dt)
-#        ego_orient += (ego_v / L) * np.tan(steering_angle) * scenario.dt
-#        ego_x += ego_v * np.cos(ego_orient) * scenario.dt
-#        ego_y += ego_v * np.sin(ego_orient) * scenario.dt
 
     surrounding_render_states = []
 
@@ -184,10 +171,6 @@ for step in range(NUM_STEPS):
         sensor_suite=sensor_suite,
         d_safe=d_safe,
         h_val=h_val,
-#        radar_range=front_radar.range_max,
-#        radar_fov_deg=front_radar.fov_deg,
-#        rear_radar_range=rear_radar.range_max,
-#        rear_radar_fov_deg=rear_radar.fov_deg,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,

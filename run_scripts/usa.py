@@ -22,7 +22,6 @@ from src.sensor_suite import SensorSuite
 from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
 
-#from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame
 
 # -----------------------------------------------------------------------------
@@ -51,7 +50,6 @@ ego = EgoState(
     y=ego_params["y"],
     orientation=ego_params["orientation"],
     velocity=DESIRED_SPEED,
-    #velocity=ego_params["velocity"],
     length=ego_params["length"],
     width=ego_params["width"],
     wheelbase=ego_params.get("wheelbase", 2.8)
@@ -62,13 +60,6 @@ print(f" Ego Initial Position: ({ego.x:.2f}, {ego.y:.2f})")
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
 # -----------------------------------------------------------------------------
-#ego_x = ego_params["x"]
-#ego_y = ego_params["y"]
-#ego_orient = ego_params["orientation"]
-#ego_v = ego_params["velocity"]
-#ego_l = ego_params["length"]
-#ego_w = ego_params["width"]
-#
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 uss_left = SideUltrasonicSensor(range_max=5.0, fov_deg=100.0, side="left")
@@ -81,7 +72,6 @@ lane_width = get_current_lane_width(scenario, ego=ego)
 
 # USA changes lane to the left (+lane_width) with no positional delay (trigger_x=None)
 planner = BehaviorPlanner(mode="GAP_SEARCH", target_offset=lane_width, start_distance=30.0)
-#planner = BehaviorPlanner(target_offset=lane_width)
 target_path = extract_target_lanelet_path(scenario, ego)
 
 has_collided = False
@@ -106,10 +96,6 @@ for step in range(NUM_STEPS):
         surrounding_obstacles=surrounding_obstacles,
         step=step,
         sensor_suite=sensor_suite,
-        #radar=front_radar,
-        #rear_radar=rear_radar,
-        #uss_left=uss_left,
-        #uss_right=uss_right,
         current_path=target_path,
     )
 
@@ -123,17 +109,11 @@ for step in range(NUM_STEPS):
         eval_offset = 0.0
 
     lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=eval_offset)
-    #lead_target = front_radar.track_lead_vehicle(
-        #ego, surrounding_obstacles, step,
-        #target_offset=eval_offset,
-    #)
 
     d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
-    lead_target_id = None
 
     if lead_target is not None and not has_collided:
         target_x, target_y, target_v, target_id, x_local = lead_target
-        lead_target_id = target_id
         h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
 
         u_control = cbf_solver.solve(
@@ -152,14 +132,7 @@ for step in range(NUM_STEPS):
         steering_angle = stanley_ctrl.compute_steering(
             ego=ego, reference_path=target_path)
         ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
-#
-#        L = stanley_ctrl.wheelbase
-#        ego_v = max(0.0, ego_v + u_control * scenario.dt)
-#        ego_orient += (ego_v / L) * np.tan(steering_angle) * scenario.dt
-#        ego_x += ego_v * np.cos(ego_orient) * scenario.dt
-#        ego_y += ego_v * np.sin(ego_orient) * scenario.dt
-#
-#    ego_poly, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
+
     surrounding_render_states = []
 
     for obs in surrounding_obstacles:
@@ -184,10 +157,6 @@ for step in range(NUM_STEPS):
 
         is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
         surrounding_render_states.append((obs, obs_corners, is_hit))
-        #front_tracked = front_radar.get_detected_obstacle_ids(ego, surrounding_obstacles, step)
-        #rear_tracked = rear_radar.get_detected_obstacle_ids(ego, surrounding_obstacles, step)
-        #left_tracked = uss_left.get_detected_obstacle_ids(ego, surrounding_obstacles, step)
-        #right_tracked = uss_right.get_detected_obstacle_ids(ego, surrounding_obstacles, step)
 
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
@@ -197,24 +166,12 @@ for step in range(NUM_STEPS):
         sensor_suite=sensor_suite,
         d_safe=d_safe,
         h_val=h_val,
-        #radar_range=front_radar.range_max,
-        #radar_fov_deg=front_radar.fov_deg,
-        #rear_radar_range=rear_radar.range_max,
-        #rear_radar_fov_deg=rear_radar.fov_deg,
-        #front_tracked_ids=front_tracked,
-        #rear_tracked_ids=rear_tracked,
-        #uss_range=uss_left.range_max,
-        #uss_fov_deg=uss_left.fov_deg,
-        #left_tracked_ids=left_tracked,
-        #right_tracked_ids=right_tracked,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,
         num_steps=NUM_STEPS,
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
-        #lead_target_id=lead_target_id,
-        #adjacent_gap_config=gap_cfg
     )
     frame_files.append(frame_path)
 
