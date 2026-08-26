@@ -21,7 +21,6 @@ from src.scenario_loader import load_scenario_and_ego
 from src.sensor_suite import SensorSuite
 from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
-
 from src.visualizer import render_frame
 
 # -----------------------------------------------------------------------------
