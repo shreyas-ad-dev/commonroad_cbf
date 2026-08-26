@@ -100,7 +100,7 @@ for step in range(NUM_STEPS):
 
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
     
-    state, target_path, gap_cfg = planner.update_plan(
+    state, target_path = planner.update_plan(
         scenario=scenario,
         ego=ego,
         surrounding_obstacles=surrounding_obstacles,
@@ -214,7 +214,7 @@ for step in range(NUM_STEPS):
         frame_path=frame_path,
         show_trajectories=SHOW_TRAJECTORIES,
         #lead_target_id=lead_target_id,
-        adjacent_gap_config=gap_cfg
+        #adjacent_gap_config=gap_cfg
     )
     frame_files.append(frame_path)
 
