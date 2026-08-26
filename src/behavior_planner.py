@@ -7,7 +7,6 @@ from src.lateral_controller import (
     generate_lane_change_path,
 )
 from src.sensor_suite import SensorSuite
-#from src.visualizer import AdjacentGapConfig
 
 
 class BehaviorPlanner:
@@ -52,11 +51,7 @@ class BehaviorPlanner:
                     surrounding_obstacles,
                     step: int,
                     sensor_suite:SensorSuite,
-                    #radar,
                     current_path,
-                    #rear_radar=None,
-                    #uss_left=None,
-                    #uss_right=None,
                     ):
         """
         Updates the high-level behavioral state and evaluates reference trajectory paths.
@@ -85,11 +80,6 @@ class BehaviorPlanner:
             self.start_x = ego.x
             self.start_y = ego.y
 
-       # gap_cfg = AdjacentGapConfig(
-       #         target_lane_offset=self.target_offset,
-       #         safety_gap_front=10.0,
-       #         safety_gap_rear=8.0,
-       #     )
 
         if self.mode == "MAP_FOLLOW":
             updated_path = extract_target_lanelet_path(scenario, ego )
@@ -115,30 +105,7 @@ class BehaviorPlanner:
         if distance_traveled < self.start_distance:
             return self.state, current_path
 
-        # Dual radar clearance check
-        #radar_clear = radar.is_adjacent_lane_clear(
-        #        ego,
-        #        surrounding_obstacles,
-        #        step,
-        #        self.target_offset,
-        #        safety_gap_front=10.0,
-        #        safety_gap_rear=8.0,
-        #        rear_radar=rear_radar
-        #)
-
-
-
-
-        #active_uss = uss_left if self.target_offset > 0 else uss_right
-        #uss_clear = active_uss.is_adjacent_lane_clear(
-        #        ego,
-        #        surrounding_obstacles,
-        #        step,
-        #        self.target_offset
-        #) if active_uss is not None else True
-
         lane_change_clearance_flags  = sensor_suite.is_lane_change_safe(ego=ego, target_offset=self.target_offset, step=step, safety_gap_front=10.0, safety_gap_rear=8.0)
-        #gap_cfg.is_clear = lane_change_clearance_flags.radar_clear
 
         if lane_change_clearance_flags.is_safe:
             self.state = "LANE_CHANGE"
