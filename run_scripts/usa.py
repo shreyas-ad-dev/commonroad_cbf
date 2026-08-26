@@ -5,6 +5,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
+import numpy as np
+
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
 from src.ego_state import EgoState, get_car_polygon
@@ -15,14 +17,14 @@ from src.lateral_controller import (
     get_road_heading_at_position,
 )
 from src.radar import RadarSensor
-from src.sensor_suite import SensorSuite
 from src.scenario_loader import load_scenario_and_ego
+from src.sensor_suite import SensorSuite
 from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
 
 #from src.vehicle_dynamics import get_car_polygon
 from src.visualizer import render_frame
-import numpy as np
+
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
