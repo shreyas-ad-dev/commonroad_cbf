@@ -162,10 +162,8 @@ def generate_lane_change_path(
     d_offset = target_lane_offset * (6 * t**5 - 15 * t**4 + 10 * t**3)
 
     # 3. Direction vectors: Forward (u_hat) and Perpendicular Normal (n_hat)
-#    u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
-#    n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
-#
     u_hat, n_hat = ego.road_frame_vectors
+
     # 4. Map back to global coordinates (Vectorized outer product)
     path_points = ego.position + np.outer(s, u_hat) + np.outer(d_offset, n_hat)
 

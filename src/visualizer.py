@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+
 import matplotlib.pyplot as plt
 import numpy as np
 from commonroad.visualization.mp_renderer import MPRenderer
@@ -8,14 +8,6 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from src.ego_state import EgoState
 from src.sensor_suite import SensorSuite
-
-@dataclass
-class AdjacentGapConfig:
-    target_lane_offset: float
-    safety_gap_front: float = 10.0
-    safety_gap_rear: float = 12.0
-    lane_tolerance: float = 1.8
-    is_clear: bool | None = None
 
 
 def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
@@ -71,24 +63,12 @@ def render_frame(
         sensor_suite: SensorSuite,
         d_safe,
         h_val,
-        #radar_range,
-        #radar_fov_deg, 
         surrounding_states,
         has_collided,
         step,
         num_steps,
         frame_path,
         show_trajectories: bool = False,
-        #rear_radar_range: float | None = None,
-        #rear_radar_fov_deg: float | None = None,
-        #front_tracked_ids: set[int] | None = None,
-        #rear_tracked_ids: set[int] | None = None,
-        #uss_range: float | None = None,
-        #uss_fov_deg: float | None = None,
-        #left_tracked_ids: set[int] | None = None,
-        #right_tracked_ids: set[int] | None = None,
-        #lead_target_id: int | None = None,
-        adjacent_gap_config: AdjacentGapConfig | None = None
         ):
     """
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
@@ -116,11 +96,6 @@ def render_frame(
         left_tracked_ids (set | None, optional): Set of obstacle IDs detected by left USS. Defaults to None.
         right_tracked_ids (set | None, optional): Set of obstacle IDs detected by right USS. Defaults to None.
     """
-
-   # front_tracked_ids = front_tracked_ids or set()
-   # rear_tracked_ids = rear_tracked_ids or set()
-   # left_tracked_ids = left_tracked_ids or set()
-   # right_tracked_ids = right_tracked_ids or set()
 
     front_radar = sensor_suite.front_radar
     rear_radar = sensor_suite.rear_radar
@@ -249,34 +224,6 @@ def render_frame(
                 ego.position
             ))
 
-        # Adjacent lane radar check zone
-        if adjacent_gap_config is not None:
-            cfg = adjacent_gap_config
-           # heading = cfg.road_heading if cfg.road_heading is not None else ego.orientation
-           # u_hat = np.array([np.cos(heading), np.sin(heading)])
-           # n_hat = np.array([-np.sin(heading), np.cos(heading)])
-            u_hat, n_hat = ego.road_frame_vectors
-            lat_min = cfg.target_lane_offset - cfg.lane_tolerance
-            lat_max = cfg.target_lane_offset + cfg.lane_tolerance
-            long_min = -cfg.safety_gap_rear
-            long_max = cfg.safety_gap_front
-
-            local_box = np.array([
-                [long_min, lat_min],
-                [long_max, lat_min],
-                [long_max, lat_max],
-                [long_min, lat_max]
-            ])
-
-            adj_zone_world = ego.position + np.outer(local_box[:, 0], u_hat) + np.outer(local_box[:, 1], n_hat)
-            zone_clr = "#2ECC71" if cfg.is_clear else "#E74C3C" if cfg.is_clear is False else "#9B59B6"
-
-            ax.add_patch(patches.Polygon(
-                adj_zone_world, closed=True,
-                facecolor=zone_clr, edgecolor="#8E44AD",
-                alpha=0.30, linestyle=":", linewidth=1.8, zorder=75
-            ))
-
 
     # 3. Render CBF Safety Buffer Zone
     w2 = ego.width / 2.0
@@ -311,19 +258,6 @@ def render_frame(
             if obs_state is not None:
                 pos = obs_state.position
                 ax.plot(pos[0], pos[1], marker="X", markersize=10, color="red", zorder=105)
-#                ax.text(
-#                    pos[0],
-#                    pos[1] + 2.5,
-#                    "LEAD",
-#                    color="red",
-#                    fontsize=10,
-#                    fontweight="bold",
-#                    ha="center",
-#                    va="bottom",
-#                    bbox=dict(boxstyle="round,pad=0.2", facecolor="yellow", alpha=0.8),
-#                    zorder=100
-#                )
-
 
         obs_poly_shapely = ShapelyPolygon(corners)
         ax.add_patch(patches.Polygon(
@@ -379,7 +313,7 @@ def render_frame(
                                 )
 
 
-           # 5. Render Ego Vehicle
+   # 5. Render Ego Vehicle
     
     ego_color = "#FF0000" if has_collided else "#00FF00"
     ax.add_patch(patches.Polygon(
@@ -400,10 +334,6 @@ def render_frame(
     
     if rear_radar is not None:
         ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar.range_max:.0f}m, {rear_radar.fov_deg:.0f}°)")
-
-    if adjacent_gap_config is not None:
-        clr_lbl = "Adjacent Gap (Clear)" if adjacent_gap_config.is_clear else "Adjacent Gap (Blocked)"
-        ax.plot([], [], color="#8E44AD", linestyle=":", linewidth=2, label=clr_lbl)
 
     if uss_left is not None:
         ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_left.range_max:.0f}m, {uss_left.fov_deg:.0f}°)")

@@ -158,13 +158,6 @@ class RadarSensor(BaseSensor):
         half_corridor = lane_corridor_width / 2.0
         u_road, n_road = ego.road_frame_vectors
 
-  #      if road_heading is not None:
-  #          u_road = np.array([np.cos(road_heading), np.sin(road_heading)])
-  #          n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
-  #      else:
-  #          u_road = ego.heading_vector
-  #          n_road = ego.normal_vector
-
         for obs in obstacles:
             st = obs.state_at_time(step)
             if st is None or obs.obstacle_id not in scan_res["fov_data"]:
@@ -191,14 +184,6 @@ class RadarSensor(BaseSensor):
                     bumper_x_local = max(0.1, center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
 
                     lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, bumper_x_local)
-              #  in_current_lane = abs(lat_road) <= half_corridor
-              #  in_target_lane = is_changing_lane and (abs(lat_road - target_offset) <= half_corridor)
-
-              #  if (in_current_lane or in_target_lane) and (min_dist < closest_dist):
-              #      closest_dist = min_dist
-              #      target_v = float(getattr(st, 'velocity', 15.0))
-              #      lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, center_x_local)
-
         return lead_target
 
     def is_adjacent_lane_clear(self,
@@ -211,12 +196,6 @@ class RadarSensor(BaseSensor):
                                rear_radar: "RadarSensor | None" = None,
                                lane_tolerance: float = 1.8) -> bool:
         """Evaluates whether an adjacent lane target gap is clear using front and rear radars."""
-        #if road_heading is not None:
-        #    u_hat = np.array([np.cos(road_heading), np.sin(road_heading)])
-        #    n_hat = np.array([-np.sin(road_heading), np.cos(road_heading)])
-        #else:
-        #    u_hat = ego.heading_vector
-        #    n_hat = ego.normal_vector
 
         u_hat, n_hat = ego.road_frame_vectors
 

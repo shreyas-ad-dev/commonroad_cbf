@@ -1,27 +1,34 @@
 # run_zam.py
+import sys
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.append(str(PROJECT_ROOT))
+
 import numpy as np
 
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
+    extract_target_lanelet_path,
     get_current_lane_width,
-    extract_target_lanelet_path
+    get_road_heading_at_position,
 )
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
-from src.utils import setup_frames_directory, build_gif_and_cleanup
-from src.vehicle_dynamics import get_car_polygon
+from src.sensor_suite import SensorSuite
+from src.ultrasonic import SideUltrasonicSensor
+from src.utils import build_gif_and_cleanup, setup_frames_directory
 from src.visualizer import render_frame
 
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
-PROJECT_ROOT = Path(__file__).resolve().parent
 XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_64_T-1.xml"
-GIF_NAME = "zam_zip_radar_cbf.gif"
+GIF_NAME = "zam_zip64_merge.gif"
 NUM_STEPS = 100
 DESIRED_SPEED = 15.0  # m/s
 
@@ -38,29 +45,35 @@ planning_set = scen_data["planning_problem_set"]
 ego_params = scen_data["ego_params"]
 surrounding_obstacles = scen_data["surrounding_obstacles"]
 
+ego = EgoState(
+    x=ego_params["x"],
+    y=ego_params["y"],
+    orientation=ego_params["orientation"],
+    velocity=DESIRED_SPEED,
+    length=ego_params["length"],
+    width=ego_params["width"],
+    wheelbase=ego_params.get("wheelbase", 2.8)
+)
 print(f" Loaded Scenario: {scenario.scenario_id}")
 print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
 
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
 # -----------------------------------------------------------------------------
-ego_x = ego_params["x"]
-ego_y = ego_params["y"]
-ego_orient = ego_params["orientation"]
-ego_v = ego_params["velocity"]
-ego_l = ego_params["length"]
-ego_w = ego_params["width"]
-
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
+uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
+uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right")
+
+sensor_suite = SensorSuite( front_radar=front_radar, rear_radar=rear_radar, uss_left=uss_left, uss_right=uss_right)
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
-lane_width = get_current_lane_width(scenario, ego_x=ego_params["x"], ego_y=ego_params["y"])
+lane_width = get_current_lane_width(scenario, ego=ego)
+#ego.y = ego.y - lane_width
 
 planner = BehaviorPlanner(mode="MAP_FOLLOW")
-#planner = BehaviorPlanner(target_offset=-lane_width)
-target_path = extract_target_lanelet_path(scenario, ego_params["x"], ego_params["y"])
+target_path = extract_target_lanelet_path(scenario, ego)
 
 has_collided = False
 collision_step = None
@@ -73,55 +86,58 @@ frame_files = []
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
     # State Machine Update
+
+    sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
+
     state, target_path = planner.update_plan(
         scenario=scenario,
-        ego_x=ego_x,
-        ego_y=ego_y,
-        ego_orient=ego_orient,
+        ego=ego,
         surrounding_obstacles=surrounding_obstacles,
         step=step,
-        radar=front_radar,
-        rear_radar=rear_radar,
+        sensor_suite=sensor_suite,
         current_path=target_path
     )
 
-    # Radar Lead Tracking (using road heading for corridor accuracy)
-    lead_target = front_radar.track_lead_vehicle(
-        ego_x, ego_y, ego_orient, surrounding_obstacles, step,
-        target_offset=planner.target_offset,
-        road_heading=ego_params["orientation"]
-    )
 
-    d_safe = cbf_solver.d_min + (ego_v * cbf_solver.tau)
+    road_heading = get_road_heading_at_position(scenario, ego.position)
+
+    # Radar Lead Tracking (using road heading for corridor accuracy)
+    if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
+        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
+        lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
+        remaining_offset = planner.target_offset - lat_progress
+        eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
+    else:
+        # In MAP_FOLLOW / LANE_KEEP: track vehicles directly in current lane
+        eval_offset = 0.0
+
+
+    lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=eval_offset)
+    d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
     if lead_target is not None and not has_collided:
         target_x, target_y, target_v, target_id, x_local = lead_target
-        h_val = cbf_solver.compute_barrier(x_local, ego_v)
+        h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
 
         u_control = cbf_solver.solve(
             longitudinal_dist=x_local,
-            v_ego=ego_v,
+            v_ego=ego.velocity,
             v_target=target_v,
             v_des=DESIRED_SPEED,
             dt=scenario.dt,
         )
     else:
         h_val = None
-        u_control = 0.5 * (DESIRED_SPEED - ego_v)
+        u_control = 0.5 * (DESIRED_SPEED - ego.velocity)
 
     # Dynamics Propagation
     if not has_collided:
         steering_angle = stanley_ctrl.compute_steering(
-            ego_x, ego_y, ego_orient, ego_v, target_path
+            ego=ego, reference_path=target_path
         )
+        ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
 
-        L = stanley_ctrl.wheelbase
-        ego_v = max(0.0, ego_v + u_control * scenario.dt)
-        ego_orient += (ego_v / L) * np.tan(steering_angle) * scenario.dt
-        ego_x += ego_v * np.cos(ego_orient) * scenario.dt
-        ego_y += ego_v * np.sin(ego_orient) * scenario.dt
 
-    ego_poly, ego_corners = get_car_polygon(ego_x, ego_y, ego_orient, length=ego_l, width=ego_w)
     surrounding_render_states = []
 
     for obs in surrounding_obstacles:
@@ -138,7 +154,7 @@ for step in range(NUM_STEPS):
         w = getattr(obs.obstacle_shape, "width", 2.0)
         obs_poly, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
 
-        if not has_collided and ego_poly.intersects(obs_poly):
+        if not has_collided and ego.polygon.intersects(obs_poly):
             has_collided = True
             collision_step = step
             collided_obstacle_id = obs.obstacle_id
@@ -151,13 +167,10 @@ for step in range(NUM_STEPS):
     render_frame(
         scenario=scenario,
         planning_problem_set=planning_set,
-        ego_state=(ego_x, ego_y, ego_orient, ego_v, ego_l, ego_w),
+        ego=ego,
+        sensor_suite=sensor_suite,
         d_safe=d_safe,
         h_val=h_val,
-        radar_range=front_radar.range_max,
-        radar_fov_deg=front_radar.fov_deg,
-        rear_radar_range=rear_radar.range_max,
-        rear_radar_fov_deg=rear_radar.fov_deg,
         surrounding_states=surrounding_render_states,
         has_collided=has_collided,
         step=step,
@@ -175,6 +188,6 @@ build_gif_and_cleanup(frame_files, gif_path, scenario.dt)
 
 print(f"\n ZAM Simulation Complete! Output saved to: '{gif_path.name}'")
 if has_collided:
-    print(f"💥 Collision detected at Step {collision_step}.")
+    print(f" Collision detected at Step {collision_step}.")
 else:
-    print("🛡️ SAFE! CBF Safety Control maintained nominal distance.")
+    print(" SAFE! CBF Safety Control maintained nominal distance.")
