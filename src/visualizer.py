@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+
 import matplotlib.pyplot as plt
 import numpy as np
 from commonroad.visualization.mp_renderer import MPRenderer
@@ -8,6 +9,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from src.ego_state import EgoState
 from src.sensor_suite import SensorSuite
+
 
 @dataclass
 class AdjacentGapConfig:

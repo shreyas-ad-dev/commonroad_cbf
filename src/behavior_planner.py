@@ -9,6 +9,7 @@ from src.lateral_controller import (
 from src.sensor_suite import SensorSuite
 from src.visualizer import AdjacentGapConfig
 
+
 class BehaviorPlanner:
     """
     High-level state machine responsible for managing autonomous driving behaviors.

@@ -1,6 +1,6 @@
 # src/sensor_suite.py
 from dataclasses import dataclass
-import numpy as np
+
 from src.ego_state import EgoState
 from src.radar import RadarSensor
 from src.ultrasonic import SideUltrasonicSensor
