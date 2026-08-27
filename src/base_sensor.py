@@ -5,13 +5,29 @@ from src.ego_state import EgoState, get_car_polygon
 
 class BaseSensor:
     """
-    Base class for vehicle perception sensors. Handles local frame transformations 
-    and geometric point sampling for bounding box corners.
+    Base class for vehicle perception sensors.
+
+    Provides common geometric utilities, including coordinate frame 
+    transformations (world to ego-local) and obstacle bounding box 
+    point extraction.
+
+    Attributes:
+        range_max (float): Maximum detection range of the sensor in meters.
+        fov_deg (float): Total field-of-view angle in degrees.
+        half_fov_rad (float): Half of the field-of-view angle in radians.
     """
 
     def __init__(self,
                  range_max: float,
                  fov_deg: float):
+        """
+        Initializes the base sensor parameters.
+
+        Args:
+            range_max (float): Maximum detection range in meters.
+            fov_deg (float): Total field of view in degrees.
+        """
+
         self.range_max = range_max
         self.fov_deg = fov_deg
         self.half_fov_rad = np.radians(fov_deg / 2.0)
@@ -22,15 +38,16 @@ class BaseSensor:
             obs_x: float,
             obs_y: float) -> np.ndarray:
         """
-        Transforms world coordinates into Ego's body-fixed local frame.
+        Transforms 2D global world coordinates into Ego's body-fixed local frame.
 
         Args:
             ego (EgoState): Current state of the Ego vehicle.
-            obs_x (float): Target X coordinate in global world frame.
-            obs_y (float): Target Y coordinate in global world frame.
+            obs_x (float): Target X position in the global frame.
+            obs_y (float): Target Y position in the global frame.
 
         Returns:
-            np.ndarray: A 2D vector [x_local, y_local] in Ego's body-fixed frame.
+            np.ndarray: A 2-element array [x_local, y_local] representing 
+                the local coordinates relative to the Ego vehicle.
         """
 
         d_vec = np.array([obs_x, obs_y]) - ego.position
@@ -42,13 +59,24 @@ class BaseSensor:
                                        ego: EgoState,
                                        obstacle: object,
                                        step: int) -> tuple[np.ndarray, list[np.ndarray]] | None:
-        """
-        Extracts the center and 4 bounding box corner points of an obstacle, 
-        transformed into Ego's local coordinate frame.
+        """Extracts the local center and corner points of an obstacle.
+
+        Computes the center position and four bounding box corners of an 
+        obstacle at a given time step, transformed into Ego's local frame.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacle (object): Target obstacle object supporting `state_at_time(step)`.
+            step (int): Discrete simulation time step.
 
         Returns:
-            Tuple[local_obs_pos_center, local_obs_corner_points] or None if step is invalid.
+            tuple[np.ndarray, list[np.ndarray]] | None: A tuple containing:
+                - local_obs_pos_center (np.ndarray): Local center position [x, y].
+                - local_obs_corner_points (list[np.ndarray]): List of 5 local points 
+                  (center followed by the 4 bounding box corners).
+                Returns None if the obstacle state is unavailable at the given step.
         """
+
         st = obstacle.state_at_time(step)
         if st is None:
             return None
@@ -72,7 +100,22 @@ class BaseSensor:
                          ego: EgoState,
                          obstacle: object,
                          step: int) -> float:
-        """Calculates minimum Euclidean distance from Ego to any obstacle corner/center."""
+        """
+        Calculates the minimum distance from Ego to an obstacle's key points.
+
+        Evaluates distance across all key local points (center + 4 bounding corners) 
+        and returns the shortest Euclidean distance.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacle (object): Target obstacle object.
+            step (int): Discrete simulation time step.
+
+        Returns:
+            float: Minimum Euclidean distance to any obstacle point in meters. 
+                Returns float('inf') if the obstacle state is invalid.
+        """
+
         res = self.get_obstacle_eval_points_local(ego, obstacle, step)
         if res is None:
             return float('inf')

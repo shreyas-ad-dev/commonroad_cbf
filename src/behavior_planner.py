@@ -10,11 +10,19 @@ from src.sensor_suite import SensorSuite
 
 
 class BehaviorPlanner:
-    """
-    High-level state machine responsible for managing autonomous driving behaviors.
-    
-    Evaluates sensor clearance (radar/ultrasonic) and determines when to maintain 
+    """High-level state machine responsible for managing autonomous driving behaviors.
+
+    Evaluates sensor clearance (via `SensorSuite`) and determines when to maintain 
     lane keeping or initiate dynamic lane changes based on surrounding traffic gaps.
+
+    Attributes:
+        mode (str): Planning mode ('GAP_SEARCH' or 'MAP_FOLLOW').
+        target_offset (float): Lateral offset to target lane in meters.
+        start_distance (float): Minimum distance Ego must travel before triggering a lane change.
+        state (str): Current behavioral state ('LANE_KEEP' or 'LANE_CHANGE').
+        start_x (float | None): Initial X position of the Ego vehicle.
+        start_y (float | None): Initial Y position of the Ego vehicle.
+        lane_change_start_pos (np.ndarray | None): Ego position when lane change was initiated.
     """
 
     def __init__(self,
@@ -54,26 +62,25 @@ class BehaviorPlanner:
                     current_path,
                     ):
         """
-        Updates the high-level behavioral state and evaluates reference trajectory paths.
+        Updates high-level behavioral state and generates target reference trajectories.
 
-        Evaluates clearance from front/rear radar and side ultrasonic sensors. If all
-        active sensors report an open gap in the target lane and the minimum travel distance
-        threshold is met, transitions state from 'LANE_KEEP' to 'LANE_CHANGE'.
+        Evaluates clearance around the Ego vehicle using the sensor suite. If 
+        lane change clearance flags confirm a safe gap in the target lane and 
+        the travel distance threshold is met, transitions state from 'LANE_KEEP' 
+        to 'LANE_CHANGE'.
 
         Args:
-            scenario: The CommonRoad scenario object containing map and timing info.
+            scenario: CommonRoad scenario object containing map and timing info.
             ego (EgoState): Current state and kinematics of the Ego vehicle.
             surrounding_obstacles (list): List of dynamic obstacles in the scene.
             step (int): Current simulation time step index.
-            radar (RadarSensor): Front radar sensor instance.
+            sensor_suite (SensorSuite): Suite containing active perception sensors.
             current_path (np.ndarray): Current reference trajectory path coordinates.
-            rear_radar (RadarSensor, optional): Rear radar sensor instance. Defaults to None.
-            uss_left (SideUltrasonicSensor, optional): Left ultrasonic sensor instance. Defaults to None.
-            uss_right (SideUltrasonicSensor, optional): Right ultrasonic sensor instance. Defaults to None.
 
         Returns:
-            Tuple[str, np.ndarray]: Updated planner state ('LANE_KEEP' or 'LANE_CHANGE') 
-            and the active reference path trajectory.
+            tuple[str, np.ndarray]: A tuple containing:
+                - state (str): Updated planner state ('LANE_KEEP' or 'LANE_CHANGE').
+                - active_path (np.ndarray): The active reference path trajectory coordinates.
         """
 
         if self.start_x is None or self.start_y is None:

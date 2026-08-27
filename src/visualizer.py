@@ -1,3 +1,4 @@
+# src/visualizer.py
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +12,20 @@ from src.sensor_suite import SensorSuite
 
 
 def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
-    """Creates a Shapely Polygon representing a sensor wedge/cone."""
+    """
+    Creates a Shapely Polygon representing a sensor wedge/cone.
+
+    Args:
+        center (np.ndarray | tuple[float, float]): (x, y) coordinates of the sensor origin.
+        r (float): Detection range radius in meters.
+        theta1_deg (float): Starting angle of the arc in degrees.
+        theta2_deg (float): Ending angle of the arc in degrees.
+        num_points (int, optional): Number of linear arc interpolation points. Defaults to 30.
+
+    Returns:
+        ShapelyPolygon: Polygon geometry representing the sensor field of view cone.
+    """
+    
     angles = np.radians(np.linspace(theta1_deg, theta2_deg, num_points))
     arc_points = [
         (center[0] + r * np.cos(a), center[1] + r * np.sin(a)) 
@@ -74,27 +88,18 @@ def render_frame(
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
 
     Args:
-        scenario: CommonRoad scenario instance containing lanelet network and metadata.
-        planning_problem_set: CommonRoad planning problem set for goal region display.
+        scenario (object): CommonRoad scenario instance containing lanelet network and metadata.
+        planning_problem_set (object): CommonRoad planning problem set for goal region display.
         ego (EgoState): Current Ego vehicle state object.
+        sensor_suite (SensorSuite): Sensor suite containing active radar and ultrasonic sensors.
         d_safe (float): Calculated safe longitudinal distance buffer in meters.
         h_val (float | None): Control Barrier Function barrier value h(x), if available.
-        radar_range (float): Maximum range of front radar in meters.
-        radar_fov_deg (float): Field of view of front radar in degrees.
-        surrounding_states (list): List of tuples (obstacle, corners, is_hit) for surrounding traffic.
+        surrounding_states (list[tuple[object, np.ndarray, bool]]): List of tuples (obstacle, corners, is_hit) for surrounding traffic.
         has_collided (bool): Whether a collision has occurred at this step.
         step (int): Current simulation time step index.
         num_steps (int): Total number of simulation steps.
         frame_path (Path): File path where the rendered PNG frame image will be saved.
         show_trajectories (bool, optional): Whether to draw predicted paths for traffic. Defaults to False.
-        rear_radar_range (float | None, optional): Range of rear radar in meters. Defaults to None.
-        rear_radar_fov_deg (float | None, optional): FOV of rear radar in degrees. Defaults to None.
-        front_tracked_ids (set | None, optional): Set of obstacle IDs detected by front radar. Defaults to None.
-        rear_tracked_ids (set | None, optional): Set of obstacle IDs detected by rear radar. Defaults to None.
-        uss_range (float | None, optional): Range of ultrasonic side sensors in meters. Defaults to None.
-        uss_fov_deg (float | None, optional): FOV of ultrasonic side sensors in degrees. Defaults to None.
-        left_tracked_ids (set | None, optional): Set of obstacle IDs detected by left USS. Defaults to None.
-        right_tracked_ids (set | None, optional): Set of obstacle IDs detected by right USS. Defaults to None.
     """
 
     front_radar = sensor_suite.front_radar

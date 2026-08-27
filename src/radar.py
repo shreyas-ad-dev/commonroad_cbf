@@ -12,7 +12,12 @@ class RadarSensor(BaseSensor):
 
     Supports 'front' (+x_local) and 'rear' (-x_local) mounting orientations on the vehicle.
     Evaluates FOV containment across all bounding box corners and center of dynamic obstacles.
-    """
+
+    Attributes:
+        mount_position (str): Orientation relative to vehicle ('front' or 'rear').
+        range_max (float): Maximum detection range in meters.
+        fov_deg (float): Total azimuth field of view in degrees.
+        """
 
     def __init__(self,
                  range_max: float = 70.0,
@@ -29,6 +34,7 @@ class RadarSensor(BaseSensor):
         Raises:
             ValueError: If mount_position is not 'front' or 'rear'.
         """
+
         if mount_position not in ["front", "rear"]:
             raise ValueError("mount_position must be either 'front' or 'rear'")
 
@@ -134,7 +140,18 @@ class RadarSensor(BaseSensor):
                                   ego: EgoState,
                                   obstacles: list,
                                   step: int) -> set[int]:
-        """Gets cached set of obstacle IDs that fall within this radar's FOV at the given step."""
+        """
+        Gets cached set of obstacle IDs that fall within this radar's FOV at the given step.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacles (list): List of dynamic obstacle objects.
+            step (int): Current simulation time step index.
+
+        Returns:
+            set[int]: Set of detected obstacle unique identifiers.
+        """
+
         return self.scan(ego, obstacles, step)["detected_ids"]
 
     def track_lead_vehicle(self,
@@ -147,8 +164,22 @@ class RadarSensor(BaseSensor):
         """
         Scans vehicles in Ego's FOV cone and tracks the closest lead target.
 
-        Uses cached FOV evaluation results to eliminate redundant coordinate transformations.
+        Uses cached FOV evaluation results to eliminate redundant coordinate 
+        transformations and projects obstacles onto the road corridor.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            obstacles (list): List of dynamic obstacle objects.
+            step (int): Current simulation time step index.
+            lane_corridor_width (float, optional): Corridor width for lead vehicle filtering in meters. Defaults to 2.5.
+            target_offset (float, optional): Lateral lane offset in meters (+ for left, - for right). Defaults to 0.0.
+
+        Returns:
+            tuple[float, float, float, int, float] | None: A tuple containing 
+                (x_world, y_world, velocity, obstacle_id, bumper_to_bumper_x_local), 
+                or None if no lead vehicle is detected.
         """
+
         if self.mount_position != "front":
             return None
 
@@ -195,8 +226,22 @@ class RadarSensor(BaseSensor):
                                safety_gap_rear: float = 10.0,
                                rear_radar: "RadarSensor | None" = None,
                                lane_tolerance: float = 1.8) -> bool:
-        """Evaluates whether an adjacent lane target gap is clear using front and rear radars."""
+        """
+        Evaluates whether an adjacent lane target gap is clear using front and rear radars.
 
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            surrounding_obstacles (list): List of dynamic obstacles in the scene.
+            step (int): Current simulation time step index.
+            target_lane_offset (float): Target lane offset in meters (+ for left, - for right).
+            safety_gap_front (float, optional): Required clearance ahead in target lane. Defaults to 12.0.
+            safety_gap_rear (float, optional): Required clearance behind in target lane. Defaults to 10.0.
+            rear_radar (RadarSensor | None, optional): Optional rear radar instance for rear scanning. Defaults to None.
+            lane_tolerance (float, optional): Half-width tolerance for target lane check. Defaults to 1.8.
+
+        Returns:
+            bool: True if target lane gap is completely clear of obstacles, False otherwise.
+        """
         u_hat, n_hat = ego.road_frame_vectors
 
         front_scan = self.scan(ego, surrounding_obstacles, step)

@@ -8,7 +8,16 @@ from src.ultrasonic import SideUltrasonicSensor
 
 @dataclass
 class PerceptionState:
-    """Snapshot of perception results for the current time step."""
+    """
+    Snapshot of perception results for the current time step.
+
+    Attributes:
+        lead_target (tuple | None, optional): Tracked lead vehicle state tuple or None.
+        radar_scans (dict, optional): Dictionary containing front and rear radar scan results.
+        uss_scans (dict, optional): Dictionary containing left and right USS scan results.
+        filtered_obstacles (list, optional): Spatially pre-filtered dynamic dynamic/static obstacles.
+    """
+
     lead_target: tuple | None = None
     radar_scans: dict = None
     uss_scans: dict = None
@@ -19,12 +28,25 @@ class LaneClearanceResult:
     is_safe: bool
     radar_clear: bool
     uss_clear: bool
+    """
+    Encapsulates fused safety and clearance evaluations for lane change maneuvers.
 
+    Attributes:
+        is_safe (bool): Overall boolean determination combining radar and USS clearance.
+        radar_clear (bool): Indicates if front and rear radar fields detect a clear target lane gap.
+        uss_clear (bool): Indicates if side ultrasonic sensors detect a clear blind spot.
+    """
+    
     def __bool__(self) -> bool:
-        """Allows direct boolean evaluation: if clearance: ..."""
+        """
+        Allows direct boolean evaluation: if clearance: """
         return self.is_safe
 
 class SensorSuite:
+    """
+    Fuses multi-modal perception sensors (Radar and USS) and manages obstacle tracking.
+    """
+
     def __init__(
         self,
         front_radar: RadarSensor,
@@ -33,6 +55,17 @@ class SensorSuite:
         uss_right: SideUltrasonicSensor | None = None,
         max_perception_radius: float = 85.0
     ):
+        """
+        Initializes the SensorSuite instance.
+
+        Args:
+            front_radar (RadarSensor): Primary front-facing radar sensor instance.
+            rear_radar (RadarSensor | None, optional): Primary rear-facing radar sensor instance.
+            uss_left (SideUltrasonicSensor | None, optional): Left side ultrasonic sensor instance.
+            uss_right (SideUltrasonicSensor | None, optional): Right side ultrasonic sensor instance.
+            max_perception_radius (float, optional): Spatial bounding radius for pre-filtering in meters. Defaults to 85.0.
+        """
+
         self.front_radar = front_radar
         self.rear_radar = rear_radar
         self.uss_left = uss_left
@@ -42,28 +75,43 @@ class SensorSuite:
 
     @property
     def lead_target(self) -> tuple | None:
+        """
+        tuple | None: Returns the active lead target state from the latest perception step.
+        """
         return self.latest_perception.lead_target
 
     @property
     def front_tracked_ids(self) -> set[int]:
+        """
+        set[int]: Set of unique obstacle IDs currently detected by the front radar.
+        """
         if not self.latest_perception.radar_scans:
             return set()
         return self.latest_perception.radar_scans.get("front", {}).get("detected_ids", set())
 
     @property
     def rear_tracked_ids(self) -> set[int]:
+        """
+        set[int]: Set of unique obstacle IDs currently detected by the rear radar.
+        """
         if not self.latest_perception.radar_scans:
             return set()
         return self.latest_perception.radar_scans.get("rear", {}).get("detected_ids", set())
 
     @property
     def left_tracked_ids(self) -> set[int]:
+        """
+        set[int]: Set of unique obstacle IDs currently detected by the left ultrasonic sensor.
+        """
         if not self.latest_perception.uss_scans:
             return set()
         return self.latest_perception.uss_scans.get("left", {}).get("detected_ids", set())
 
     @property
     def right_tracked_ids(self) -> set[int]:
+        """
+        set[int]: Set of unique obstacle IDs currently detected by the right ultrasonic sensor.
+        """
         if not self.latest_perception.uss_scans:
             return set()
         return self.latest_perception.uss_scans.get("right", {}).get("detected_ids", set())
@@ -75,7 +123,19 @@ class SensorSuite:
             step: int,
             target_offset : float = 0
             ) -> PerceptionState:
-        """Runs spatial pre-filtering and updates all mounted sensors."""
+        """
+        Runs spatial pre-filtering and updates all mounted sensors.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            all_obstacles (list): Full list of scenario obstacles.
+            step (int): Current simulation time step index.
+            target_offset (float, optional): Target lateral offset for lead tracking. Defaults to 0.0.
+
+        Returns:
+            PerceptionState: Updated snapshot of current perception results.
+        """
+
         # 1. Fast Spatial Pre-filter (Single pass)
         r_sq = self.max_perception_radius ** 2
         ego_pos = ego.position
@@ -113,7 +173,18 @@ class SensorSuite:
         return self.latest_perception
 
     def track_lead(self, ego: EgoState, step: int, target_offset: float = 0.0):
-        """Allows re-evaluating or updating lead target after planner executes."""
+        """
+        Allows re-evaluating or updating lead target after planner executes.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            step (int): Current simulation time step index.
+            target_offset (float, optional): Target lateral offset in meters. Defaults to 0.0.
+
+        Returns:
+            tuple | None: Updated lead target tuple or None if no vehicle is tracked.
+        """
+        
         obstacles = self.latest_perception.filtered_obstacles or []
         self.latest_perception.lead_target = self.front_radar.track_lead_vehicle(
             ego=ego,
@@ -131,7 +202,20 @@ class SensorSuite:
         safety_gap_front: float = 10.0,
         safety_gap_rear: float = 8.0
     ) -> LaneClearanceResult:
-        """High-level semantic query fusing Radar and USS clearance checks."""
+        """
+        High-level semantic query fusing Radar and USS clearance checks.
+
+        Args:
+            ego (EgoState): Current state of the Ego vehicle.
+            target_offset (float): Target lane offset (+ for left, - for right).
+            step (int): Current simulation time step index.
+            safety_gap_front (float, optional): Required clearance ahead in target lane. Defaults to 10.0.
+            safety_gap_rear (float, optional): Required clearance behind in target lane. Defaults to 8.0.
+
+        Returns:
+            LaneClearanceResult: Object containing fused safety status and detailed breakdowns.
+        """
+        
         obstacles = self.latest_perception.filtered_obstacles or []
 
         # 1. Check Radars

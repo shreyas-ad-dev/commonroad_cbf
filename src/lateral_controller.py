@@ -6,9 +6,20 @@ from src.ego_state import EgoState
 
 def get_road_heading_at_position(scenario, position) -> float:
     """
-    Computes the road heading angle (in radians) from the centerline 
-    of the nearest lanelet at a given (x, y) position.
+    Computes the road heading angle from the centerline of the nearest lanelet.
+
+    Identifies the primary lanelet at or near the given position and evaluates 
+    the tangent angle (in radians) along the closest centerline segment.
+
+    Args:
+        scenario: The CommonRoad scenario instance containing the lanelet network.
+        position (np.ndarray | list[float]): 2D world position [x, y] in meters.
+
+    Returns:
+        float | None: Heading angle in radians within [-pi, pi], or None if no 
+            lanelet is found.
     """
+
     # Find lanelet(s) containing or closest to the position
     lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([position])[0]
     
@@ -143,15 +154,14 @@ def generate_lane_change_path(
     Uses a quintic polynomial S-curve profile for smooth lateral acceleration and minimum jerk.
 
     Args:
-        start_pos (np.ndarray): Starting 2D position vector [x, y] of the maneuver in world frame.
-        road_heading (float): Current road/lane orientation angle in radians.
+        ego (EgoState): Current state of the Ego vehicle providing position and road frame vectors.
         target_lane_offset (float, optional): Lateral offset to target lane (+ for left, - for right). Defaults to 3.5.
         total_length (float, optional): Total longitudinal path distance in meters. Defaults to 150.0.
         num_points (int, optional): Number of discrete waypoint samples to generate. Defaults to 200.
 
     Returns:
         np.ndarray: An Nx2 array of global [x, y] coordinates forming the lane change reference path.
-    """
+    """   
     
     # 1. Distance along track axis
     s = np.linspace(0, total_length, num_points)

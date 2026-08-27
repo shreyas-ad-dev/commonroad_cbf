@@ -29,6 +29,7 @@ def create_gif_from_frames(
         output_gif_path (Path): Target file path where the generated GIF will be saved.
         dt (float): Simulation time step delta in seconds (converted internally to milliseconds for frame duration).
     """
+
     images = [Image.open(f).copy() for f in frame_files]
     images[0].save(
         output_gif_path,
@@ -49,6 +50,7 @@ def build_gif_and_cleanup(
         gif_path (Path): Output destination path for the compiled GIF.
         dt (float): Time step delta between consecutive frames in seconds.
     """
+
     if not frame_files:
         print("  No frame files found to generate GIF.")
         return

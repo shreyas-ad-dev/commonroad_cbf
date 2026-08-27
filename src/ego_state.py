@@ -111,6 +111,16 @@ class EgoState:
 
     @property
     def road_frame_vectors(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Computes tangential and normal unit vectors for the road coordinate frame.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: A tuple containing:
+                - heading_vector (np.ndarray): 2D unit vector along road heading.
+                - normal_vector (np.ndarray): 2D unit vector perpendicular to road heading (left).
+                Falls back to vehicle orientation vectors if `road_heading` is None.
+        """
+
         if self.road_heading is not None:
             return (
                     np.array([np.cos(self.road_heading), np.sin(self.road_heading)]),

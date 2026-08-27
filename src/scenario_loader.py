@@ -23,7 +23,7 @@ def load_scenario_and_ego(xml_path: Path):
             - 'ego_obstacle': Matched scenario obstacle object (if ZAM style), else None.
             - 'ego_params': Dict containing Ego initial state ('id', 'x', 'y', 
               'orientation', 'velocity', 'length', 'width').
-            - 'surrounding_obstacles': List of remaining dynamic dynamic/static obstacles.
+            - 'surrounding_obstacles': List of remaining dynamic/static obstacles.
 
     Raises:
         FileNotFoundError: If xml_path does not exist on disk.
