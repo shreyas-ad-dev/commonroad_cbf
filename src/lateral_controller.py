@@ -73,7 +73,21 @@ def extract_target_lanelet_path(
     # 1. Find initial lanelet
     lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([ego.position])[0]
     if not lanelet_ids:
-        raise ValueError(f"No lanelet found near position {ego.position}")
+        nearest_lanelet_id = None
+        min_dist = float("inf")
+        for lnet in scenario.lanelet_network.lanelets:
+            # Measure distance from ego to lanelet center vertices
+            dists = np.linalg.norm(lnet.center_vertices - ego.position, axis=1)
+            d_min = np.min(dists)
+            if d_min < min_dist:
+                min_dist = d_min
+                nearest_lanelet_id = lnet.lanelet_id
+        
+        if nearest_lanelet_id is not None:
+            lanelet_ids = [nearest_lanelet_id]
+        else:
+            raise ValueError("No lanelets present in scenario network.")
+        #raise ValueError(f"No lanelet found near position {ego.position}")
 
     current_lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
     all_center_verts = [np.array(current_lanelet.center_vertices)]
