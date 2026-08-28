@@ -95,30 +95,30 @@ class BaseSensor:
         local_obs_corner_points = [self.to_local_frame(ego, pt[0], pt[1]) for pt in world_obs_corner_points]
 
         return local_obs_pos_center, local_obs_corner_points
-
-    def get_min_distance(self,
-                         ego: EgoState,
-                         obstacle: object,
-                         step: int) -> float:
-        """
-        Calculates the minimum distance from Ego to an obstacle's key points.
-
-        Evaluates distance across all key local points (center + 4 bounding corners) 
-        and returns the shortest Euclidean distance.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacle (object): Target obstacle object.
-            step (int): Discrete simulation time step.
-
-        Returns:
-            float: Minimum Euclidean distance to any obstacle point in meters. 
-                Returns float('inf') if the obstacle state is invalid.
-        """
-
-        res = self.get_obstacle_eval_points_local(ego, obstacle, step)
-        if res is None:
-            return float('inf')
-
-        _, local_points = res
-        return min(float(np.linalg.norm(pt)) for pt in local_points)
+#
+#    def get_min_distance(self,
+#                         ego: EgoState,
+#                         obstacle: object,
+#                         step: int) -> float:
+#        """
+#        Calculates the minimum distance from Ego to an obstacle's key points.
+#
+#        Evaluates distance across all key local points (center + 4 bounding corners) 
+#        and returns the shortest Euclidean distance.
+#
+#        Args:
+#            ego (EgoState): Current state of the Ego vehicle.
+#            obstacle (object): Target obstacle object.
+#            step (int): Discrete simulation time step.
+#
+#        Returns:
+#            float: Minimum Euclidean distance to any obstacle point in meters. 
+#                Returns float('inf') if the obstacle state is invalid.
+#        """
+#
+#        res = self.get_obstacle_eval_points_local(ego, obstacle, step)
+#        if res is None:
+#            return float('inf')
+#
+#        _, local_points = res
+#        return min(float(np.linalg.norm(pt)) for pt in local_points)
