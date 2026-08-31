@@ -78,24 +78,29 @@ for step in range(NUM_STEPS):
         current_path=target_path,
     )
 
-    lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=0.0)
-    d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
-
-    if lead_target is not None and not has_collided:
-        target_x, target_y, target_v, target_id, x_local = lead_target
-        h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
-        u_control = cbf_solver.solve(
-            longitudinal_dist=x_local,
-            v_ego=ego.velocity,
-            v_target=target_v,
-            v_des=DESIRED_SPEED,
-            dt=scenario.dt,
-        )
-    else:
+    if has_collided:
+        u_control = 0.0
+        steering_angle = 0.0
+        sensor_suite.clear_tracking()
         h_val = None
-        u_control = 0.5 * (DESIRED_SPEED - ego.velocity)
+    else:
+        lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=0.0)
+        d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
-    if not has_collided:
+        if lead_target is not None:
+            target_x, target_y, target_v, target_id, x_local = lead_target
+            h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
+            u_control = cbf_solver.solve(
+                    longitudinal_dist=x_local,
+                    v_ego=ego.velocity,
+                    v_target=target_v,
+                    v_des=DESIRED_SPEED,
+                    dt=scenario.dt,
+                    )
+        else:
+            h_val = None
+            u_control = 0.5 * (DESIRED_SPEED - ego.velocity)
+
         steering_angle = stanley_ctrl.compute_steering(ego=ego, reference_path=target_path)
         ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
 
