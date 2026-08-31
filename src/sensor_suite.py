@@ -116,6 +116,12 @@ class SensorSuite:
             return set()
         return self.latest_perception.uss_scans.get("right", {}).get("detected_ids", set())
 
+    def clear_tracking(self):
+        self.latest_perception.lead_target = None
+        self.latest_perception.radar_scans = None
+        self.latest_perception.uss_scans = None
+        self.latest_perception.filtered_obstacles.clear()
+
     def update(
             self,
             ego: EgoState,
