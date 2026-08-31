@@ -57,7 +57,7 @@ cbf_solver = CBFQPSolver(gamma=1.2, d_min=5.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0, wheelbase=ego.wheelbase)
 
 planner = BehaviorPlanner(mode="MAP_FOLLOW")
-target_path = extract_target_lanelet_path(scenario, ego)
+target_path = extract_target_lanelet_path(scenario, ego, planning_problem_set=planning_set)
 
 has_collided = False
 collision_step = None
@@ -69,7 +69,7 @@ for step in range(NUM_STEPS):
     ego.road_heading = get_road_heading_at_position(scenario, ego.position)
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
-    state, target_path = planner.update_plan(
+    state, updated_path = planner.update_plan(
         scenario=scenario,
         ego=ego,
         surrounding_obstacles=surrounding_obstacles,
@@ -77,6 +77,8 @@ for step in range(NUM_STEPS):
         sensor_suite=sensor_suite,
         current_path=target_path,
     )
+    if planner.state == "LANE_CHANGE":
+        target_path = updated_path
 
     if has_collided:
         u_control = 0.0

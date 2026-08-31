@@ -1,8 +1,8 @@
+from collections import deque 
 import numpy as np
 from scipy.interpolate import interp1d
 
 from src.ego_state import EgoState
-
 
 def get_road_heading_at_position(scenario, position) -> float:
     """
@@ -49,76 +49,195 @@ def get_road_heading_at_position(scenario, position) -> float:
     return np.arctan2(dy, dx)
 
 def extract_target_lanelet_path(
-        scenario,
-        ego: EgoState,
-        horizon_meters: float = 200.0) -> np.ndarray:
+    scenario,
+    ego: EgoState,
+    planning_problem_set=None,
+    horizon_meters: float = 200.0,
+) -> np.ndarray:
+    """Finds the precise sequence of lanelets connecting Ego to the goal lanelet using BFS,
+
+    then densely resamples path points every 0.5 meters.
     """
-    Extracts and chains lanelet centerlines along the successor path from the Ego vehicle's position.
+    lnet_net = scenario.lanelet_network
 
-    Traverses successor lanelets in a CommonRoad scenario until the cumulative length reaches 
-    or exceeds the target horizon, then densely resamples the path points every 0.5 meters.
+    # 1. Locate starting lanelet
+    start_ids = lnet_net.find_lanelet_by_position([ego.position])[0]
+    if not start_ids:
+        min_d = float("inf")
+        best_id = None
+        for lnet in lnet_net.lanelets:
+            d = np.min(
+                np.linalg.norm(lnet.center_vertices - ego.position, axis=1)
+            )
+            if d < min_d:
+                min_d = d
+                best_id = lnet.lanelet_id
+        start_ids = [best_id]
 
-    Args:
-        scenario: The CommonRoad scenario instance containing the lanelet network.
-        ego (EgoState): Current state of the Ego vehicle.
-        horizon_meters (float, optional): Total longitudinal distance forward to chain. Defaults to 200.0.
+    start_id = start_ids[0]
 
-    Returns:
-        np.ndarray: An Nx2 numpy array of resampled path coordinates [[x1, y1], [x2, y2], ...].
+    # 2. Extract Goal Lanelet IDs from Planning Problem Set
+    goal_ids = set()
+    if planning_problem_set is not None:
+        try:
+            p_prob = list(planning_problem_set.planning_problem_dict.values())[
+                0
+            ]
+            for st in p_prob.goal.state_list:
+                if hasattr(st, "position"):
+                    pos_attr = st.position
+                    if hasattr(pos_attr, "lanelet_id"):
+                        goal_ids.update(pos_attr.lanelet_id)
+                    elif hasattr(pos_attr, "center"):
+                        # If goal is specified by shape/position center
+                        g_lanelets = lnet_net.find_lanelet_by_position(
+                            [pos_attr.center]
+                        )[0]
+                        if g_lanelets:
+                            goal_ids.update(g_lanelets)
+        except Exception as e:
+            print(f"[Warning] Parsing goal failed: {e}")
 
-    Raises:
-        ValueError: If no lanelet is found near the Ego vehicle's current position.
-    """
+    # 3. BFS to find lanelet route from start_id to any goal_id
+    route_ids = []
+    if goal_ids:
+        queue = deque([[start_id]])
+        visited = {start_id}
+        found_route = None
 
-    # 1. Find initial lanelet
-    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([ego.position])[0]
-    if not lanelet_ids:
-        nearest_lanelet_id = None
-        min_dist = float("inf")
-        for lnet in scenario.lanelet_network.lanelets:
-            # Measure distance from ego to lanelet center vertices
-            dists = np.linalg.norm(lnet.center_vertices - ego.position, axis=1)
-            d_min = np.min(dists)
-            if d_min < min_dist:
-                min_dist = d_min
-                nearest_lanelet_id = lnet.lanelet_id
-        
-        if nearest_lanelet_id is not None:
-            lanelet_ids = [nearest_lanelet_id]
-        else:
-            raise ValueError("No lanelets present in scenario network.")
-        #raise ValueError(f"No lanelet found near position {ego.position}")
+        while queue:
+            path = queue.popleft()
+            curr_id = path[-1]
 
-    current_lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
-    all_center_verts = [np.array(current_lanelet.center_vertices)]
-    
-    total_length = 0.0
-    for verts in all_center_verts:
-        total_length += np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1])))
+            if curr_id in goal_ids:
+                found_route = path
+                break
 
-    # 2. Chain successor lanelets until horizon_meters is reached
-    while total_length < horizon_meters and current_lanelet.successor:
-        next_id = current_lanelet.successor[0]  # Follow primary successor
-        current_lanelet = scenario.lanelet_network.find_lanelet_by_id(next_id)
-        
-        next_verts = np.array(current_lanelet.center_vertices)
-        all_center_verts.append(next_verts[1:])  # Skip duplicate start vertex
-        
-        total_length += np.sum(np.hypot(np.diff(next_verts[:, 0]), np.diff(next_verts[:, 1])))
+            curr_lnet = lnet_net.find_lanelet_by_id(curr_id)
+            if curr_lnet and curr_lnet.successor:
+                for succ in curr_lnet.successor:
+                    if succ not in visited:
+                        visited.add(succ)
+                        queue.append(path + [succ])
 
-    # 3. Combine chained points
-    center_verts = np.vstack(all_center_verts)
+        if found_route:
+            route_ids = found_route
 
-    # 4. Resample densely every 0.5m
+    # Fallback: if no goal route found, use default successor chain
+    if not route_ids:
+        curr = lnet_net.find_lanelet_by_id(start_id)
+        route_ids = [start_id]
+        while curr and curr.successor:
+            next_id = curr.successor[0]
+            route_ids.append(next_id)
+            curr = lnet_net.find_lanelet_by_id(next_id)
+
+    # 4. Build continuous centerline vertices along the route
+    all_verts = []
+    tot_len = 0.0
+
+    for idx, lid in enumerate(route_ids):
+        lnet = lnet_net.find_lanelet_by_id(lid)
+        verts = np.array(lnet.center_vertices)
+        if idx > 0:
+            verts = verts[1:]  # Avoid duplicate boundary point
+        all_verts.append(verts)
+
+        tot_len += np.sum(
+            np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1]))
+        )
+        if tot_len >= horizon_meters:
+            break
+
+    center_verts = np.vstack(all_verts)
+
+    # 5. Resample densely every 0.5m
     distances = np.zeros(len(center_verts))
-    distances[1:] = np.cumsum(np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1])))
+    distances[1:] = np.cumsum(
+        np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1]))
+    )
+
+    unique_indices = np.where(np.diff(distances, prepend=-1.0) > 1e-5)[0]
+    distances = distances[unique_indices]
+    center_verts = center_verts[unique_indices]
 
     s_dense = np.arange(0, distances[-1], 0.5)
-    interp_x = interp1d(distances, center_verts[:, 0], kind='linear')
-    interp_y = interp1d(distances, center_verts[:, 1], kind='linear')
+    interp_x = interp1d(distances, center_verts[:, 0], kind="linear")
+    interp_y = interp1d(distances, center_verts[:, 1], kind="linear")
 
     return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
 
+#def extract_target_lanelet_path(
+#        scenario,
+#        ego: EgoState,
+#        horizon_meters: float = 200.0) -> np.ndarray:
+#    """
+#    Extracts and chains lanelet centerlines along the successor path from the Ego vehicle's position.
+#
+#    Traverses successor lanelets in a CommonRoad scenario until the cumulative length reaches 
+#    or exceeds the target horizon, then densely resamples the path points every 0.5 meters.
+#
+#    Args:
+#        scenario: The CommonRoad scenario instance containing the lanelet network.
+#        ego (EgoState): Current state of the Ego vehicle.
+#        horizon_meters (float, optional): Total longitudinal distance forward to chain. Defaults to 200.0.
+#
+#    Returns:
+#        np.ndarray: An Nx2 numpy array of resampled path coordinates [[x1, y1], [x2, y2], ...].
+#
+#    Raises:
+#        ValueError: If no lanelet is found near the Ego vehicle's current position.
+#    """
+#
+#    # 1. Find initial lanelet
+#    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([ego.position])[0]
+#    if not lanelet_ids:
+#        nearest_lanelet_id = None
+#        min_dist = float("inf")
+#        for lnet in scenario.lanelet_network.lanelets:
+#            # Measure distance from ego to lanelet center vertices
+#            dists = np.linalg.norm(lnet.center_vertices - ego.position, axis=1)
+#            d_min = np.min(dists)
+#            if d_min < min_dist:
+#                min_dist = d_min
+#                nearest_lanelet_id = lnet.lanelet_id
+#        
+#        if nearest_lanelet_id is not None:
+#            lanelet_ids = [nearest_lanelet_id]
+#        else:
+#            raise ValueError("No lanelets present in scenario network.")
+#        #raise ValueError(f"No lanelet found near position {ego.position}")
+#
+#    current_lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+#    all_center_verts = [np.array(current_lanelet.center_vertices)]
+#    
+#    total_length = 0.0
+#    for verts in all_center_verts:
+#        total_length += np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1])))
+#
+#    # 2. Chain successor lanelets until horizon_meters is reached
+#    while total_length < horizon_meters and current_lanelet.successor:
+#        next_id = current_lanelet.successor[0]  # Follow primary successor
+#        current_lanelet = scenario.lanelet_network.find_lanelet_by_id(next_id)
+#        
+#        next_verts = np.array(current_lanelet.center_vertices)
+#        all_center_verts.append(next_verts[1:])  # Skip duplicate start vertex
+#        
+#        total_length += np.sum(np.hypot(np.diff(next_verts[:, 0]), np.diff(next_verts[:, 1])))
+#
+#    # 3. Combine chained points
+#    center_verts = np.vstack(all_center_verts)
+#
+#    # 4. Resample densely every 0.5m
+#    distances = np.zeros(len(center_verts))
+#    distances[1:] = np.cumsum(np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1])))
+#
+#    s_dense = np.arange(0, distances[-1], 0.5)
+#    interp_x = interp1d(distances, center_verts[:, 0], kind='linear')
+#    interp_y = interp1d(distances, center_verts[:, 1], kind='linear')
+#
+#    return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
+#
 
 def get_current_lane_width(
         scenario,
