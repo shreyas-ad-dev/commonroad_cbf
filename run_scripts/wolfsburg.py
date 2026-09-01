@@ -10,10 +10,11 @@ from src.cbf_solver import CBFQPSolver
 from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
-    extract_target_lanelet_path,
-    get_current_lane_width,
-    get_road_heading_at_position,
+    #extract_target_lanelet_path,
+    #get_current_lane_width,
+    #get_road_heading_at_position,
 )
+from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
 from src.sensor_suite import SensorSuite
@@ -21,6 +22,9 @@ from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
 from src.visualizer import render_frame
 
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "DEU_Wolfsburg-61_1_T-4.xml"
 GIF_NAME = "deu_wolfsburg_cbf.gif"
@@ -29,7 +33,9 @@ DESIRED_SPEED = 12.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_wolfsburg"
 setup_frames_directory(FRAMES_DIR)
-
+# -----------------------------------------------------------------------------
+# 1. Load Scenario
+# -----------------------------------------------------------------------------
 scen_data = load_scenario_and_ego(XML_FILE)
 scenario = scen_data["scenario"]
 planning_set = scen_data["planning_problem_set"]
@@ -46,6 +52,14 @@ ego = EgoState(
     wheelbase=ego_params.get("wheelbase", 2.8),
 )
 
+print(f" Loaded Scenario: {scenario.scenario_id}")
+print(f" Ego Initial Position: ({ego.x:.2f}, {ego.y:.2f})")
+
+# -----------------------------------------------------------------------------
+# 2. State Initialization & Module Setup
+# -----------------------------------------------------------------------------
+map_module = MapModule(scenario=scenario, planning_problem_set=planning_set)
+
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
@@ -57,8 +71,8 @@ sensor_suite = SensorSuite(
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0, wheelbase=ego.wheelbase)
 
-planner = BehaviorPlanner(mode="MAP_FOLLOW")
-target_path = extract_target_lanelet_path(scenario, ego)
+planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+target_path = map_module.extract_target_lanelet_path(ego)
 
 has_collided = False
 collision_step = None
@@ -66,14 +80,17 @@ collided_obstacle_id = None
 frozen_obs_states = {}
 frame_files = []
 
+# -----------------------------------------------------------------------------
+# 3. Main Simulation Loop
+# -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
-    ego.road_heading = get_road_heading_at_position(scenario, ego.position)
+
+    ego.road_heading = map_module.get_road_heading_at_position(ego.position)
+
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
     state, target_path = planner.update_plan(
-        scenario=scenario,
         ego=ego,
-        surrounding_obstacles=surrounding_obstacles,
         step=step,
         sensor_suite=sensor_suite,
         current_path=target_path,
@@ -144,6 +161,10 @@ for step in range(NUM_STEPS):
         show_trajectories=SHOW_TRAJECTORIES,
     )
     frame_files.append(frame_path)
+
+# -----------------------------------------------------------------------------
+# 4. GIF Generation & Cleanup
+# -----------------------------------------------------------------------------
 
 gif_path = PROJECT_ROOT / GIF_NAME
 build_gif_and_cleanup(frame_files, gif_path, scenario.dt)

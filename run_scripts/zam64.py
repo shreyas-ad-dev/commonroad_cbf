@@ -12,10 +12,11 @@ from src.cbf_solver import CBFQPSolver
 from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import (
     StanleyController,
-    extract_target_lanelet_path,
-    get_current_lane_width,
-    get_road_heading_at_position,
+#    extract_target_lanelet_path,
+#    get_current_lane_width,
+#    get_road_heading_at_position,
 )
+from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
 from src.sensor_suite import SensorSuite
@@ -64,6 +65,8 @@ print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
 # -----------------------------------------------------------------------------
+map_module = MapModule(scenario=scenario, planning_problem_set=planning_set)
+
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
@@ -73,8 +76,11 @@ sensor_suite = SensorSuite( front_radar=front_radar, rear_radar=rear_radar, uss_
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
-planner = BehaviorPlanner(mode="MAP_FOLLOW")
-target_path = extract_target_lanelet_path(scenario, ego)
+lane_width = map_module.get_current_lane_width(ego=ego)
+#ego.y = ego.y - lane_width
+
+planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+target_path = map_module.extract_target_lanelet_path(ego=ego)
 
 has_collided = False
 collision_step = None
@@ -91,16 +97,14 @@ for step in range(NUM_STEPS):
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
     state, target_path = planner.update_plan(
-        scenario=scenario,
         ego=ego,
-        surrounding_obstacles=surrounding_obstacles,
         step=step,
         sensor_suite=sensor_suite,
         current_path=target_path
     )
 
 
-    road_heading = get_road_heading_at_position(scenario, ego.position)
+    road_heading = map_module.get_road_heading_at_position( ego.position)
 
     # Radar Lead Tracking (using road heading for corridor accuracy)
     if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
