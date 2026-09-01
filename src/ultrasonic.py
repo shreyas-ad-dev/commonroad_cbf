@@ -54,29 +54,64 @@ class SideUltrasonicSensor(BaseSensor):
             "target_clearance": {}
         }
 
+#    def is_in_fov(self,
+#                  ego: EgoState,
+#                  obstacle: object,
+#                  step: int) -> tuple[bool, float]:
+#        """
+#        Evaluates whether an obstacle's center or bounding box corners fall within the sensor FOV cone.
+#
+#        Args:
+#            ego (EgoState): Current state of the Ego vehicle.
+#            obstacle (object): Dynamic obstacle instance to test against.
+#            step (int): Current simulation time step index.
+#
+#        Returns:
+#            tuple[bool, float]: A tuple containing:
+#                - any_corner_in_fov (bool): True if any corner or center of obstacle is in FOV.
+#                - min_dist (float): Minimum Euclidean distance from Ego position to obstacle points.
+#        """
+#
+#        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
+#        if eval_data is None:
+#            return False, float('inf')
+#
+#        _, local_points = eval_data
+#        min_dist = float('inf')
+#        any_corner_in_fov = False
+#
+#        for pt in local_points:
+#            x_local, y_local = pt[0], pt[1]
+#            dist = float(np.hypot(x_local, y_local))
+#
+#            min_dist = min(min_dist, dist)
+#
+#            is_side_aligned= (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0)
+#            if dist <= self.range_max and is_side_aligned:
+#                sensor_y = y_local if self.side == "left" else -y_local
+#                angle = np.arctan2(x_local, sensor_y)
+#                if abs(angle) <= self.half_fov_rad:
+#                    any_corner_in_fov = True
+#
+#        return any_corner_in_fov, min_dist
+    
     def is_in_fov(self,
                   ego: EgoState,
                   obstacle: object,
-                  step: int) -> tuple[bool, float]:
+                  step: int) -> tuple[bool, float, float, float]:
         """
         Evaluates whether an obstacle's center or bounding box corners fall within the sensor FOV cone.
 
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacle (object): Dynamic obstacle instance to test against.
-            step (int): Current simulation time step index.
-
         Returns:
-            tuple[bool, float]: A tuple containing:
-                - any_corner_in_fov (bool): True if any corner or center of obstacle is in FOV.
-                - min_dist (float): Minimum Euclidean distance from Ego position to obstacle points.
+            tuple[bool, float, float, float]: (in_fov, min_dist, center_x_local, center_y_local)
         """
-
         eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
         if eval_data is None:
-            return False, float('inf')
+            return False, float('inf'), 0.0, 0.0
 
-        _, local_points = eval_data
+        center_local, local_points = eval_data
+        center_x_local, center_y_local = center_local[0], center_local[1]
+
         min_dist = float('inf')
         any_corner_in_fov = False
 
@@ -86,14 +121,14 @@ class SideUltrasonicSensor(BaseSensor):
 
             min_dist = min(min_dist, dist)
 
-            is_side_aligned= (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0)
+            is_side_aligned = (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0)
             if dist <= self.range_max and is_side_aligned:
                 sensor_y = y_local if self.side == "left" else -y_local
                 angle = np.arctan2(x_local, sensor_y)
                 if abs(angle) <= self.half_fov_rad:
                     any_corner_in_fov = True
 
-        return any_corner_in_fov, min_dist
+        return any_corner_in_fov, min_dist, center_x_local, center_y_local
 
     def scan(self,
              ego: EgoState,
@@ -123,7 +158,7 @@ class SideUltrasonicSensor(BaseSensor):
             timestamp = step * 0.1
 
             for obs in obstacles:
-                in_fov, min_dist = self.is_in_fov(ego, obs, step)
+                in_fov, min_dist, center_x_local, center_y_local= self.is_in_fov(ego, obs, step)
                 if in_fov:
                     detected_ids.add(obs.obstacle_id)
                     min_distances[obs.obstacle_id] = min_dist
@@ -133,8 +168,8 @@ class SideUltrasonicSensor(BaseSensor):
                     noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
 
                     # Transform noisy measurement back to global coordinate frame
-                    cos_yaw = np.cos(ego.yaw)
-                    sin_yaw = np.sin(ego.yaw)
+                    cos_yaw = np.cos(ego.orientation)
+                    sin_yaw = np.sin(ego.orientation)
                     global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
                     global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
 
@@ -168,7 +203,7 @@ class SideUltrasonicSensor(BaseSensor):
     def get_detections(self,
                        ego: EgoState,
                        obstacles: list,
-                       step: int) -> List[Detection]:
+                       step: int) -> list[Detection]:
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
     
