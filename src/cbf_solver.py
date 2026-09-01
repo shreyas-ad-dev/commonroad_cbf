@@ -6,6 +6,8 @@ try:
 except ImportError:
     CVXPY_AVAILABLE = False
 
+from src.ego_state import EgoState
+from src.tracker import Track
 
 class CBFQPSolver:
     """
@@ -55,6 +57,34 @@ class CBFQPSolver:
         
         d_safe = self.d_min + (v_ego * self.tau)
         return longitudinal_dist - d_safe
+
+    def solve_from_track(self,
+                         ego: EgoState,
+                         lead_track: [Track],
+                         v_des: float,
+                         dt: float) -> float:
+        """
+        Convenience wrapper to solve CBF-QP directly from a filtered Track object.
+        """
+        if lead_track is None:
+            # No lead vehicle tracked, apply nominal acceleration towards target speed[cite: 12]
+            u_nom = 0.5 * (v_des - ego.v)
+            return float(np.clip(u_nom, self.a_min, self.a_max))
+
+        u_road, _ = ego.road_frame_vectors
+        d_vec = lead_track.position - ego.position
+        longitudinal_dist = float(np.dot(d_vec, u_road))
+
+        # Filtered target velocity magnitude from track state vector[cite: 10]
+        v_target = float(np.hypot(lead_track.velocity[0], lead_track.velocity[1]))
+
+        return self.solve(
+            longitudinal_dist=longitudinal_dist,
+            v_ego=ego.velocity,
+            v_target=v_target,
+            v_des=v_des,
+            dt=dt
+        )
 
     def solve(self, 
               longitudinal_dist: float, 

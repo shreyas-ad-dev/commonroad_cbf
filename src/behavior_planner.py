@@ -9,6 +9,7 @@ from src.lateral_controller import (
     generate_lane_change_path,
 )
 from src.sensor_suite import SensorSuite
+from src.tracker import Track
 
 
 class BehaviorPlanner:
@@ -57,6 +58,30 @@ class BehaviorPlanner:
         self.start_x = None
         self.start_y = None
         self.lane_change_start_pos = None
+
+    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite) -> [Track]:
+        """Identifies the closest tracked lead vehicle in Ego's current corridor using tracked states."""
+        tracks = sensor_suite.tracked_objects
+        if not tracks:
+            return None
+
+        u_road, n_road = ego.road_frame_vectors
+        closest_dist = float('inf')
+        lead_track = None
+
+        for track in tracks:
+            # Vector from ego to track position estimate[cite: 10]
+            d_vec = track.position - ego.position
+            long_road = np.dot(d_vec, u_road)
+            lat_road = np.dot(d_vec, n_road)
+
+            # Check if track is ahead in lane corridor
+            if long_road > 0.0 and abs(lat_road) <= 1.8:
+                if long_road < closest_dist:
+                    closest_dist = long_road
+                    lead_track = track
+
+        return lead_track
 
     def update_plan(self,
                     ego:EgoState,
