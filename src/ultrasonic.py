@@ -4,7 +4,7 @@ import numpy as np
 
 from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
-
+from src.tracker import Detection
 
 class SideUltrasonicSensor(BaseSensor):
     """
@@ -22,7 +22,8 @@ class SideUltrasonicSensor(BaseSensor):
     def __init__(self,
                  range_max: float = 8.0,
                  fov_deg: float = 100.0,
-                 side: str = "left"):
+                 side: str = "left",
+                 noise_std: float = 0.1):
         """
         Initializes the SideUltrasonicSensor instance.
 
@@ -30,6 +31,7 @@ class SideUltrasonicSensor(BaseSensor):
             range_max (float, optional): Maximum detection range in meters. Defaults to 8.0.
             fov_deg (float, optional): Total field of view in degrees. Defaults to 100.0.
             side (str, optional): Sensor side mounting ('left' or 'right'). Defaults to "left".
+            noise_std (float, optional): Gaussian noise standard deviation. Defaults to 0.1.
 
         Raises:
             ValueError: If side is not 'left' or 'right'.
@@ -39,12 +41,16 @@ class SideUltrasonicSensor(BaseSensor):
 
         super().__init__(range_max=range_max, fov_deg=fov_deg)
         self.side = side
+        self.sensor_id = f"uss_{side}"
+        self.noise_std = noise_std
+        self.R = np.eye(2) * (noise_std ** 2)
 
         # Stateful internal cache
         self._last_step: int | None = None
         self._scan_cache: dict[str, Any] = {
             "detected_ids": set(),
             "min_distances": {},
+            "detections": [],
             "target_clearance": {}
         }
 
@@ -112,6 +118,9 @@ class SideUltrasonicSensor(BaseSensor):
             self._last_step = step
             detected_ids: set[int] = set()
             min_distances: dict[int, float] = {}
+            detections: [Detection] = []
+
+            timestamp = step * 0.1
 
             for obs in obstacles:
                 in_fov, min_dist = self.is_in_fov(ego, obs, step)
@@ -119,9 +128,29 @@ class SideUltrasonicSensor(BaseSensor):
                     detected_ids.add(obs.obstacle_id)
                     min_distances[obs.obstacle_id] = min_dist
 
+                    # Apply measurement noise in local frame
+                    noisy_x_local = center_x_local + np.random.normal(0.0, self.noise_std)
+                    noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
+
+                    # Transform noisy measurement back to global coordinate frame
+                    cos_yaw = np.cos(ego.yaw)
+                    sin_yaw = np.sin(ego.yaw)
+                    global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
+                    global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
+
+                    detections.append(
+                        Detection(
+                            sensor_id=self.sensor_id,
+                            timestamp=timestamp,
+                            z=np.array([global_x, global_y], dtype=np.float64),
+                            R=self.R
+                        )
+                    )
+
             self._scan_cache = {
                 "detected_ids": detected_ids,
                 "min_distances": min_distances,
+                "detections": detections,
                 "target_clearance": {}
             }
 
@@ -136,6 +165,13 @@ class SideUltrasonicSensor(BaseSensor):
 
         return self._scan_cache
 
+    def get_detections(self,
+                       ego: EgoState,
+                       obstacles: list,
+                       step: int) -> List[Detection]:
+        """Gets cached list of Detection objects for MOT tracking pipeline."""
+        return self.scan(ego, obstacles, step)["detections"]
+    
     def get_detected_obstacle_ids(self,
                                   ego: EgoState,
                                   obstacles: list,
