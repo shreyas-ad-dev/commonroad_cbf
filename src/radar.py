@@ -4,6 +4,7 @@ import numpy as np
 
 from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
+from src.tracker import Detection
 
 
 class RadarSensor(BaseSensor):
@@ -22,7 +23,8 @@ class RadarSensor(BaseSensor):
     def __init__(self,
                  range_max: float = 70.0,
                  fov_deg: float = 60.0,
-                 mount_position: str = "front"):
+                 mount_position: str = "front",
+                 noise_std: float = 0.5):
         """
         Initializes the RadarSensor instance.
 
@@ -30,6 +32,7 @@ class RadarSensor(BaseSensor):
             range_max (float, optional): Maximum detection range in meters. Defaults to 70.0.
             fov_deg (float, optional): Total azimuth field of view in degrees. Defaults to 60.0.
             mount_position (str, optional): Orientation relative to vehicle ('front' or 'rear'). Defaults to "front".
+            noise_std (float, optional): Standard deviation of Gaussian measurement noise. Defaults to 0.5.
 
         Raises:
             ValueError: If mount_position is not 'front' or 'rear'.
@@ -40,12 +43,16 @@ class RadarSensor(BaseSensor):
 
         super().__init__(range_max=range_max, fov_deg=fov_deg)
         self.mount_position = mount_position
+        self.sensor_id  = f"radar_{mount_position}"
+        self.noise_std = noise_std
+        self.R = np.eye(2) * (noise_std **2)
 
         # Stateful internal cache
         self._last_step: int | None = None
         self._scan_cache: dict[str, Any] = {
             "detected_ids": set(),
             "fov_data": {},  # Maps obs_id -> (in_fov, min_dist, center_x_local, center_y_local)
+            "detections": [],
             "lead_target": None
         }
 
@@ -120,6 +127,9 @@ class RadarSensor(BaseSensor):
             self._last_step = step
             detected_ids: set[int] = set()
             fov_data: dict[int, tuple[bool, float, float, float]] = {}
+            detections: [Detection] = []
+            
+            timestamp = step * 0.1 # 10 Hz step delta time
 
             for obs in obstacles:
                 in_fov, min_dist, center_x_local, center_y_local = self.is_in_fov(ego, obs, step)
@@ -128,13 +138,40 @@ class RadarSensor(BaseSensor):
                 if in_fov:
                     detected_ids.add(obs.obstacle_id)
 
+                    # Apply measurement noise to local center coordinates
+                    noisy_x_local = center_x_local + np.random.normal(0.0, self.noise_std)
+                    noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
+
+                    # Transform noisy measurement back to global coordinates
+                    cos_yaw = np.cos(ego.yaw)
+                    sin_yaw = np.sin(ego.yaw)
+                    global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
+                    global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
+
+                    detections.append(
+                        Detection(
+                            sensor_id=self.sensor_id,
+                            timestamp=timestamp,
+                            z=np.array([global_x, global_y], dtype=np.float64),
+                            R=self.R
+                        )
+                    )
+
             self._scan_cache = {
                 "detected_ids": detected_ids,
                 "fov_data": fov_data,
+                "detections": detections,
                 "lead_target": None
             }
 
         return self._scan_cache
+
+    def get_detections(self,
+                       ego: EgoState,
+                       obstacles: list,
+                       step: int) -> List[Detection]:
+        """Gets cached list of Detection objects for MOT tracking pipeline."""
+        return self.scan(ego, obstacles, step)["detections"]
 
     def get_detected_obstacle_ids(self,
                                   ego: EgoState,
