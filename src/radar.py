@@ -143,8 +143,8 @@ class RadarSensor(BaseSensor):
                     noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
 
                     # Transform noisy measurement back to global coordinates
-                    cos_yaw = np.cos(ego.yaw)
-                    sin_yaw = np.sin(ego.yaw)
+                    cos_yaw = np.cos(ego.orientation)
+                    sin_yaw = np.sin(ego.orientation)
                     global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
                     global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
 
@@ -169,7 +169,7 @@ class RadarSensor(BaseSensor):
     def get_detections(self,
                        ego: EgoState,
                        obstacles: list,
-                       step: int) -> List[Detection]:
+                       step: int) -> list[Detection]:
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
 
