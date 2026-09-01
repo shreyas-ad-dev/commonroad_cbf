@@ -4,169 +4,51 @@ from scipy.interpolate import interp1d
 
 from src.ego_state import EgoState
 
-def get_road_heading_at_position(scenario, position) -> float:
-    """
-    Computes the road heading angle from the centerline of the nearest lanelet.
-
-    Identifies the primary lanelet at or near the given position and evaluates 
-    the tangent angle (in radians) along the closest centerline segment.
-
-    Args:
-        scenario: The CommonRoad scenario instance containing the lanelet network.
-        position (np.ndarray | list[float]): 2D world position [x, y] in meters.
-
-    Returns:
-        float | None: Heading angle in radians within [-pi, pi], or None if no 
-            lanelet is found.
-    """
-
-    # Find lanelet(s) containing or closest to the position
-    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([position])[0]
-    
-    if not lanelet_ids or not lanelet_ids[0]:
-        return None
-
-        # Fallback to absolute nearest lanelet if strictly outside boundaries
-    primary_id = lanelet_ids[0][0] if isinstance(lanelet_ids[0], (list,tuple)) else lanelet_ids[0]
-    lanelet = scenario.lanelet_network.find_lanelet_by_id(primary_id)
-
-    # Extract centerline points
-    centerline = lanelet.center_vertices
-    
-    # Find the closest segment on the centerline
-    distances = np.linalg.norm(centerline - position, axis=1)
-    idx = np.argmin(distances)
-
-    # Compute heading vector along the centerline segment
-    if idx < len(centerline) - 1:
-        pt1, pt2 = centerline[idx], centerline[idx + 1]
-    else:
-        pt1, pt2 = centerline[idx - 1], centerline[idx]
-
-    dx = pt2[0] - pt1[0]
-    dy = pt2[1] - pt1[1]
-
-    return np.arctan2(dy, dx)
-
-def extract_target_lanelet_path(
-    scenario,
-    ego: EgoState,
-    planning_problem_set=None,
-    horizon_meters: float = 200.0,
-) -> np.ndarray:
-    """Finds the precise sequence of lanelets connecting Ego to the goal lanelet using BFS,
-
-    then densely resamples path points every 0.5 meters.
-    """
-    lnet_net = scenario.lanelet_network
-
-    # 1. Locate starting lanelet
-    start_ids = lnet_net.find_lanelet_by_position([ego.position])[0]
-    if not start_ids:
-        min_d = float("inf")
-        best_id = None
-        for lnet in lnet_net.lanelets:
-            d = np.min(
-                np.linalg.norm(lnet.center_vertices - ego.position, axis=1)
-            )
-            if d < min_d:
-                min_d = d
-                best_id = lnet.lanelet_id
-        start_ids = [best_id]
-
-    start_id = start_ids[0]
-
-    # 2. Extract Goal Lanelet IDs from Planning Problem Set
-    goal_ids = set()
-    if planning_problem_set is not None:
-        try:
-            p_prob = list(planning_problem_set.planning_problem_dict.values())[
-                0
-            ]
-            for st in p_prob.goal.state_list:
-                if hasattr(st, "position"):
-                    pos_attr = st.position
-                    if hasattr(pos_attr, "lanelet_id"):
-                        goal_ids.update(pos_attr.lanelet_id)
-                    elif hasattr(pos_attr, "center"):
-                        # If goal is specified by shape/position center
-                        g_lanelets = lnet_net.find_lanelet_by_position(
-                            [pos_attr.center]
-                        )[0]
-                        if g_lanelets:
-                            goal_ids.update(g_lanelets)
-        except Exception as e:
-            print(f"[Warning] Parsing goal failed: {e}")
-
-    # 3. BFS to find lanelet route from start_id to any goal_id
-    route_ids = []
-    if goal_ids:
-        queue = deque([[start_id]])
-        visited = {start_id}
-        found_route = None
-
-        while queue:
-            path = queue.popleft()
-            curr_id = path[-1]
-
-            if curr_id in goal_ids:
-                found_route = path
-                break
-
-            curr_lnet = lnet_net.find_lanelet_by_id(curr_id)
-            if curr_lnet and curr_lnet.successor:
-                for succ in curr_lnet.successor:
-                    if succ not in visited:
-                        visited.add(succ)
-                        queue.append(path + [succ])
-
-        if found_route:
-            route_ids = found_route
-
-    # Fallback: if no goal route found, use default successor chain
-    if not route_ids:
-        curr = lnet_net.find_lanelet_by_id(start_id)
-        route_ids = [start_id]
-        while curr and curr.successor:
-            next_id = curr.successor[0]
-            route_ids.append(next_id)
-            curr = lnet_net.find_lanelet_by_id(next_id)
-
-    # 4. Build continuous centerline vertices along the route
-    all_verts = []
-    tot_len = 0.0
-
-    for idx, lid in enumerate(route_ids):
-        lnet = lnet_net.find_lanelet_by_id(lid)
-        verts = np.array(lnet.center_vertices)
-        if idx > 0:
-            verts = verts[1:]  # Avoid duplicate boundary point
-        all_verts.append(verts)
-
-        tot_len += np.sum(
-            np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1]))
-        )
-        if tot_len >= horizon_meters:
-            break
-
-    center_verts = np.vstack(all_verts)
-
-    # 5. Resample densely every 0.5m
-    distances = np.zeros(len(center_verts))
-    distances[1:] = np.cumsum(
-        np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1]))
-    )
-
-    unique_indices = np.where(np.diff(distances, prepend=-1.0) > 1e-5)[0]
-    distances = distances[unique_indices]
-    center_verts = center_verts[unique_indices]
-
-    s_dense = np.arange(0, distances[-1], 0.5)
-    interp_x = interp1d(distances, center_verts[:, 0], kind="linear")
-    interp_y = interp1d(distances, center_verts[:, 1], kind="linear")
-
-    return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
-
+#
+#def get_road_heading_at_position(scenario, position) -> float:
+#    """
+#    Computes the road heading angle from the centerline of the nearest lanelet.
+#
+#    Identifies the primary lanelet at or near the given position and evaluates 
+#    the tangent angle (in radians) along the closest centerline segment.
+#
+#    Args:
+#        scenario: The CommonRoad scenario instance containing the lanelet network.
+#        position (np.ndarray | list[float]): 2D world position [x, y] in meters.
+#
+#    Returns:
+#        float | None: Heading angle in radians within [-pi, pi], or None if no 
+#            lanelet is found.
+#    """
+#
+#    # Find lanelet(s) containing or closest to the position
+#    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([position])[0]
+#    
+#    if not lanelet_ids or not lanelet_ids[0]:
+#        return None
+#
+#        # Fallback to absolute nearest lanelet if strictly outside boundaries
+#    primary_id = lanelet_ids[0][0] if isinstance(lanelet_ids[0], (list,tuple)) else lanelet_ids[0]
+#    lanelet = scenario.lanelet_network.find_lanelet_by_id(primary_id)
+#
+#    # Extract centerline points
+#    centerline = lanelet.center_vertices
+#    
+#    # Find the closest segment on the centerline
+#    distances = np.linalg.norm(centerline - position, axis=1)
+#    idx = np.argmin(distances)
+#
+#    # Compute heading vector along the centerline segment
+#    if idx < len(centerline) - 1:
+#        pt1, pt2 = centerline[idx], centerline[idx + 1]
+#    else:
+#        pt1, pt2 = centerline[idx - 1], centerline[idx]
+#
+#    dx = pt2[0] - pt1[0]
+#    dy = pt2[1] - pt1[1]
+#
+#    return np.arctan2(dy, dx)
+#
 #def extract_target_lanelet_path(
 #        scenario,
 #        ego: EgoState,
@@ -238,43 +120,43 @@ def extract_target_lanelet_path(
 #
 #    return np.column_stack((interp_x(s_dense), interp_y(s_dense)))
 #
-
-def get_current_lane_width(
-        scenario,
-        ego: EgoState,
-        default_width: float = 3.5) -> float:
-    """
-    Computes the local lane width surrounding the Ego vehicle's current position.
-
-    Identifies the active lanelet and measures the average Euclidean distance 
-    between corresponding vertices of its left and right boundaries.
-
-    Args:
-        scenario: The CommonRoad scenario instance containing the lanelet network.
-        ego (EgoState): Current state of the Ego vehicle.
-        default_width (float, optional): Fallback lane width in meters if no lanelet is found. Defaults to 3.5.
-
-    Returns:
-        float: Mean local lane width in meters.
-    """
-    
-    # 1. Find lanelets containing the vehicle position
-    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([ego.position])[0]
-
-    if not lanelet_ids:
-        return default_width
-
-    # 2. Extract the active lanelet object
-    lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
-
-    # 3. Calculate distance between left and right boundary vertices
-    left_verts = np.array(lanelet.left_vertices)
-    right_verts = np.array(lanelet.right_vertices)
-
-    # Compute widths along all vertices and return the mean/median width
-    widths = np.hypot(left_verts[:, 0] - right_verts[:, 0], left_verts[:, 1] - right_verts[:, 1])
-
-    return float(np.mean(widths))
+#
+#def get_current_lane_width(
+#        scenario,
+#        ego: EgoState,
+#        default_width: float = 3.5) -> float:
+#    """
+#    Computes the local lane width surrounding the Ego vehicle's current position.
+#
+#    Identifies the active lanelet and measures the average Euclidean distance 
+#    between corresponding vertices of its left and right boundaries.
+#
+#    Args:
+#        scenario: The CommonRoad scenario instance containing the lanelet network.
+#        ego (EgoState): Current state of the Ego vehicle.
+#        default_width (float, optional): Fallback lane width in meters if no lanelet is found. Defaults to 3.5.
+#
+#    Returns:
+#        float: Mean local lane width in meters.
+#    """
+#    
+#    # 1. Find lanelets containing the vehicle position
+#    lanelet_ids = scenario.lanelet_network.find_lanelet_by_position([ego.position])[0]
+#
+#    if not lanelet_ids:
+#        return default_width
+#
+#    # 2. Extract the active lanelet object
+#    lanelet = scenario.lanelet_network.find_lanelet_by_id(lanelet_ids[0])
+#
+#    # 3. Calculate distance between left and right boundary vertices
+#    left_verts = np.array(lanelet.left_vertices)
+#    right_verts = np.array(lanelet.right_vertices)
+#
+#    # Compute widths along all vertices and return the mean/median width
+#    widths = np.hypot(left_verts[:, 0] - right_verts[:, 0], left_verts[:, 1] - right_verts[:, 1])
+#
+#    return float(np.mean(widths))
 
 def generate_lane_change_path(
     ego: EgoState,

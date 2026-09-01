@@ -1,9 +1,11 @@
 # src/behavior_planner.py
 import numpy as np
 
+from typing import Any
 from src.ego_state import EgoState
+from src.map import MapModule
 from src.lateral_controller import (
-    extract_target_lanelet_path,
+#    extract_target_lanelet_path,
     generate_lane_change_path,
 )
 from src.sensor_suite import SensorSuite
@@ -26,6 +28,7 @@ class BehaviorPlanner:
     """
 
     def __init__(self,
+                 map_module = MapModule,
                  mode: str = "GAP_SEARCH",
                  target_offset: float = 0.0,
                  start_distance: float = 0.0):
@@ -40,7 +43,9 @@ class BehaviorPlanner:
         Raises:
             ValueError: If mode is not 'GAP_SEARCH' or 'MAP_FOLLOW'.
         """
-        
+
+        self.map_module = map_module
+
         if mode not in ["GAP_SEARCH", "MAP_FOLLOW"]:
             raise ValueError("mode must be either 'GAP_SEARCH' or 'MAP_FOLLOW'")
             
@@ -54,9 +59,7 @@ class BehaviorPlanner:
         self.lane_change_start_pos = None
 
     def update_plan(self,
-                    scenario,
                     ego:EgoState,
-                    surrounding_obstacles,
                     step: int,
                     sensor_suite:SensorSuite,
                     current_path,
@@ -89,7 +92,7 @@ class BehaviorPlanner:
 
 
         if self.mode == "MAP_FOLLOW":
-            updated_path = extract_target_lanelet_path(scenario, ego )
+            updated_path = self.map_module.extract_target_lanelet_path( ego )
             return self.state, updated_path
 
         if self.state == "LANE_CHANGE":
@@ -103,7 +106,7 @@ class BehaviorPlanner:
                 self.state = "LANE_KEEP"
                 self.target_offset = 0.0
                 self.mode = "MAP_FOLLOW"
-                updated_path = extract_target_lanelet_path(scenario, ego)
+                updated_path = self.map_module.extract_target_lanelet_path( ego)
                 return self.state, updated_path
 
             return self.state, current_path
