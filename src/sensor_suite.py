@@ -18,20 +18,20 @@ class MultiObjectTracker:
         self.max_age = max_age
         self.max_distance = max_distance
         
-        self.tracks: [Track] = []
+        self.tracks: list[Track] = []
         self._next_track_id = 1
 
     @property
-    def active_tracks(self) -> [Track]:
+    def active_tracks(self) -> list[Track]:
         """Returns all confirmed and tentative active tracks."""
         return [t for t in self.tracks if t.state != TrackState.DELETED]
 
     @property
-    def confirmed_tracks(self) -> [Track]:
+    def confirmed_tracks(self) -> list[Track]:
         """Returns only confirmed active tracks."""
         return [t for t in self.tracks if t.state == TrackState.CONFIRMED]
 
-    def process_step(self, detections: list) -> [Track]:
+    def process_step(self, detections: list) -> list[Track]:
         """Advances active tracks, associates new detections, and updates Kalman filters."""
         # 1. Predict state for all existing tracks
         for track in self.tracks:
@@ -77,10 +77,10 @@ class PerceptionState:
     """
 
     lead_target: tuple | None = None
-    radar_scans: dict = None
-    uss_scans: dict = None
-    filtered_obstacles: list = None
-    tracks: [Track] = field(default_factory=list)
+    radar_scans: dict | None = None
+    uss_scans: dict | None = None
+    filtered_obstacles: list | None = None
+    tracks: list[Track] = field(default_factory=list)
 
 
 @dataclass
@@ -123,7 +123,7 @@ class SensorSuite:
         return self.latest_perception.lead_target
 
     @property
-    def tracked_objects(self) -> [Track]:
+    def tracked_objects(self) -> list[Track]:
         """List[Track]: Confirmed active tracked objects from Kalman pipeline."""
         return self.latest_perception.tracks
 
