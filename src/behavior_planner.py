@@ -1,7 +1,6 @@
 # src/behavior_planner.py
 import numpy as np
 
-from typing import Any
 from src.ego_state import EgoState
 from src.map import MapModule
 from src.lateral_controller import (
@@ -59,7 +58,7 @@ class BehaviorPlanner:
         self.start_y = None
         self.lane_change_start_pos = None
 
-    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite) -> [Track]:
+    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite, lateral_margin: float = 3.2) -> Track | None:
         """Identifies the closest tracked lead vehicle in Ego's current corridor using tracked states."""
         tracks = sensor_suite.tracked_objects
         if not tracks:
@@ -76,10 +75,13 @@ class BehaviorPlanner:
             lat_road = np.dot(d_vec, n_road)
 
             # Check if track is ahead in lane corridor
-            if long_road > 0.0 and abs(lat_road) <= 1.8:
-                if long_road < closest_dist:
-                    closest_dist = long_road
-                    lead_track = track
+            if long_road > 0.0:
+                v_lat = float(np.dot(track.velocity, n_road))
+                effective_lat_threshold = lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
+                if abs(lat_road) <= effective_lat_threshold:
+                    if long_road < closest_dist:
+                        closest_dist = long_road
+                        lead_track = track
 
         return lead_track
 
@@ -139,11 +141,15 @@ class BehaviorPlanner:
         """
 
         # Calculate distance to upcoming lane merge point
-        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
+        dist_to_merge = self.map_module.get_distance_to_next_merge(ego=ego)
 
         # Trigger early crash checks if merge is within 10 meters
-        self.is_checking_merge = (dist_to_merge <= 10.0)
+#        t_lookahead = 1.5
+#        d_min = 5.0
+#        merge_threshold = max(ego.velocity * t_lookahead + d_min, 15.0)
+#        self.is_checking_merge = (dist_to_merge <= merge_threshold)
 
+        self.is_checking_merge = (dist_to_merge <= 25.0)
         if self.is_checking_merge:
             # Preemptively check adjacent lane clearance via SensorSuite
             clearance = sensor_suite.is_lane_change_safe(
