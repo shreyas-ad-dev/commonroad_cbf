@@ -16,7 +16,7 @@ class Detection:
     """Raw sensor measurement with associated covariance."""
     sensor_id: str
     timestamp: float
-    # Measurement vector: [x_local, y_local] or [range, azimuth] depending on configuration
+    # Measurement vector: [x_local, y_local] 
     z: np.ndarray
     # Measurement noise covariance matrix (2x2)
     R: np.ndarray
