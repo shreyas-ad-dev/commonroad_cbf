@@ -271,6 +271,22 @@ def render_frame(
             linewidth=1.0, zorder=100
         ))
 
+        # Find matching tracked object near the ground-truth obstacle center
+        obs_center = np.mean(corners, axis=0)
+        for track in sensor_suite.tracked_objects:
+            if np.linalg.norm(track.position - obs_center) < 3.0:
+                ax.text(
+                    obs_center[0], obs_center[1] + 2.0,
+                    f"TRK #{track.track_id}",
+                    color="white",
+                    fontsize=8,
+                    fontweight="bold",
+                    ha="center",
+                    bbox=dict(boxstyle="round,pad=0.15", facecolor="#111111", alpha=0.8),
+                    zorder=120
+                )
+                break
+
         for wedge_poly, highlight_color, tracked_ids, sensor_origin in sensor_polygons:
             if obs_id in tracked_ids and obs_poly_shapely.intersects(wedge_poly):
                 

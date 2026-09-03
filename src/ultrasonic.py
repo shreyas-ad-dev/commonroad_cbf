@@ -153,7 +153,7 @@ class SideUltrasonicSensor(BaseSensor):
             self._last_step = step
             detected_ids: set[int] = set()
             min_distances: dict[int, float] = {}
-            detections: [Detection] = list[]
+            detections: list[Detection] = []
 
             timestamp = step * 0.1
 
