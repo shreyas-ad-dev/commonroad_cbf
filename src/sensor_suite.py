@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 
+from src.data_association import associate_detections_to_tracks
 from src.ego_state import EgoState
 from src.radar import RadarSensor
-from src.ultrasonic import SideUltrasonicSensor
 from src.tracker import Track, TrackState
-from src.data_association import associate_detections_to_tracks
+from src.ultrasonic import SideUltrasonicSensor
 
 
 class MultiObjectTracker:

@@ -9,6 +9,7 @@ except ImportError:
 from src.ego_state import EgoState
 from src.tracker import Track
 
+
 class CBFQPSolver:
     """
     Control Barrier Function Quadratic Program (CBF-QP) Solver.

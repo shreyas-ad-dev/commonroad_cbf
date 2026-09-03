@@ -1,7 +1,8 @@
 #src/tracker.py
 
+from dataclasses import dataclass
 from enum import Enum, auto
-from dataclasses import dataclass, field
+
 import numpy as np
 
 

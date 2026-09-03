@@ -1,6 +1,4 @@
-from collections import deque 
 import numpy as np
-from scipy.interpolate import interp1d
 
 from src.ego_state import EgoState
 

@@ -6,6 +6,7 @@ from src.base_sensor import BaseSensor
 from src.ego_state import EgoState
 from src.tracker import Detection
 
+
 class SideUltrasonicSensor(BaseSensor):
     """
     Simulates short-range side-facing ultrasonic sensors (USS) for blind-spot monitoring.

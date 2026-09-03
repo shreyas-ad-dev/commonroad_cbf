@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from src.tracker import Track, Detection
+from src.tracker import Detection, Track
 
 
 def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_distance: float = 10.0) -> np.ndarray:
