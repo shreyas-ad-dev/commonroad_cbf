@@ -127,7 +127,7 @@ class RadarSensor(BaseSensor):
             self._last_step = step
             detected_ids: set[int] = set()
             fov_data: dict[int, tuple[bool, float, float, float]] = {}
-            detections: [Detection] = []
+            detections: [Detection] = list[]
             
             timestamp = step * 0.1 # 10 Hz step delta time
 
