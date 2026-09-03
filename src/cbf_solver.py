@@ -60,7 +60,7 @@ class CBFQPSolver:
 
     def solve_from_track(self,
                          ego: EgoState,
-                         lead_track: list[Track],
+                         lead_track: Track,
                          v_des: float,
                          dt: float) -> float:
         """
