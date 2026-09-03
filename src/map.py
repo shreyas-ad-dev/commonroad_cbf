@@ -28,6 +28,34 @@ class MapModule:
         self.planning_problem_set = planning_problem_set
         self.lanelet_network = scenario.lanelet_network
 
+    def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = 100.0) -> float:
+        """
+        Computes distance to the next incoming lane merge or merging lanelet boundary.
+        """
+        start_ids = self.lanelet_network.find_lanelet_by_position([ego.position])[0]
+        if not start_ids:
+            return float('inf')
+
+        curr_lnet = self.lanelet_network.find_lanelet_by_id(start_ids[0])
+        dist_accum = 0.0
+
+        while curr_lnet and dist_accum < horizon_meters:
+            # Check if current lanelet receives adjacent merge or merges into another
+            if hasattr(curr_lnet, 'predecessor') and len(curr_lnet.predecessor) > 1:
+                return max(0.0, dist_accum)
+
+            # Estimate length of current lanelet segment
+            verts = np.array(curr_lnet.center_vertices)
+            seg_len = float(np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1]))))
+            dist_accum += seg_len
+
+            if curr_lnet.successor:
+                curr_lnet = self.lanelet_network.find_lanelet_by_id(curr_lnet.successor[0])
+            else:
+                break
+
+        return float('inf')
+
     def get_road_heading_at_position(self, position: np.ndarray | list[float]) -> float | None:
         """
         Computes the road heading angle from the centerline of the nearest lanelet.

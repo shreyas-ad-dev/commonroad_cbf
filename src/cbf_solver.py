@@ -60,7 +60,7 @@ class CBFQPSolver:
 
     def solve_from_track(self,
                          ego: EgoState,
-                         lead_track: [Track],
+                         lead_track: list[Track],
                          v_des: float,
                          dt: float) -> float:
         """
@@ -68,7 +68,7 @@ class CBFQPSolver:
         """
         if lead_track is None:
             # No lead vehicle tracked, apply nominal acceleration towards target speed[cite: 12]
-            u_nom = 0.5 * (v_des - ego.v)
+            u_nom = 0.5 * (v_des - ego.velocity)
             return float(np.clip(u_nom, self.a_min, self.a_max))
 
         u_road, _ = ego.road_frame_vectors

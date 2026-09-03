@@ -83,6 +83,33 @@ class BehaviorPlanner:
 
         return lead_track
 
+    def get_merge_hazard_track(self, ego: EgoState, sensor_suite: SensorSuite, target_offset: float = 0.0) -> Track | None:
+        """
+        Scans tracked objects in both Ego's lane and target merging lane corridor.
+        """
+        tracks = sensor_suite.tracked_objects
+        if not tracks:
+            return None
+
+        u_road, n_road = ego.road_frame_vectors
+        closest_dist = float('inf')
+        hazard_track = None
+
+        for track in tracks:
+            d_vec = track.position - ego.position
+            long_road = np.dot(d_vec, u_road)
+            lat_road = np.dot(d_vec, n_road)
+
+            # Scan corridor including current lane and target merging lane offset
+            in_merge_corridor = (abs(lat_road) <= 1.8) or (abs(lat_road - target_offset) <= 1.8)
+
+            if long_road > 0.0 and in_merge_corridor:
+                if long_road < closest_dist:
+                    closest_dist = long_road
+                    hazard_track = track
+
+        return hazard_track
+
     def update_plan(self,
                     ego:EgoState,
                     step: int,
@@ -110,6 +137,28 @@ class BehaviorPlanner:
                 - state (str): Updated planner state ('LANE_KEEP' or 'LANE_CHANGE').
                 - active_path (np.ndarray): The active reference path trajectory coordinates.
         """
+
+        # Calculate distance to upcoming lane merge point
+        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
+
+        # Trigger early crash checks if merge is within 10 meters
+        self.is_checking_merge = (dist_to_merge <= 10.0)
+
+        if self.is_checking_merge:
+            # Preemptively check adjacent lane clearance via SensorSuite
+            clearance = sensor_suite.is_lane_change_safe(
+                    ego=ego, 
+                    target_offset=self.target_offset, 
+                    step=step, 
+                    safety_gap_front=10.0, 
+                    safety_gap_rear=8.0
+                    )
+            if not clearance.is_safe:
+                print(f" [Step {step}] Merge hazard detected within {dist_to_merge:.1f}m! Preemptively adjusting velocity.")
+            
+        if self.mode == "MAP_FOLLOW":
+            updated_path = self.map_module.extract_target_lanelet_path(ego)
+            return self.state, updated_path
 
         if self.start_x is None or self.start_y is None:
             self.start_x = ego.x
