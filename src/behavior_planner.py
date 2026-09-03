@@ -2,11 +2,11 @@
 import numpy as np
 
 from src.ego_state import EgoState
-from src.map import MapModule
 from src.lateral_controller import (
-#    extract_target_lanelet_path,
+    #    extract_target_lanelet_path,
     generate_lane_change_path,
 )
+from src.map import MapModule
 from src.sensor_suite import SensorSuite
 from src.tracker import Track
 
