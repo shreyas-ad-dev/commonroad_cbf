@@ -1,13 +1,12 @@
 #src/data_association.py
 
-from typing import List, Tuple
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from src.tracker import Track, Detection
 
 
-def compute_cost_matrix(tracks: List[Track], detections: List[Detection], max_distance: float = 10.0) -> np.ndarray:
+def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_distance: float = 10.0) -> np.ndarray:
     """Computes the cost (distance) matrix between active tracks and new detections.
     
     Unfeasible pairs exceeding max_distance are assigned a high gating cost.
@@ -34,10 +33,10 @@ def compute_cost_matrix(tracks: List[Track], detections: List[Detection], max_di
 
 
 def associate_detections_to_tracks(
-    tracks: List[Track],
-    detections: List[Detection],
+    tracks: list[Track],
+    detections: list[Detection],
     max_distance: float = 5.0
-) -> Tuple[List[Tuple[int, int]], List[int], List[int]]:
+) -> tuple[list[tuple[int, int]], list[int], list[int]]:
     """Performs optimal bipartite matching between predicted tracks and incoming detections.
     
     Returns:
