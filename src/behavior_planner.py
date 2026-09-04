@@ -69,7 +69,7 @@ class BehaviorPlanner:
         lead_track = None
 
         for track in tracks:
-            # Vector from ego to track position estimate[cite: 10]
+            # Vector from ego to track position estimate
             d_vec = track.position - ego.position
             long_road = np.dot(d_vec, u_road)
             lat_road = np.dot(d_vec, n_road)
@@ -77,13 +77,42 @@ class BehaviorPlanner:
             # Check if track is ahead in lane corridor
             if long_road > 0.0:
                 v_lat = float(np.dot(track.velocity, n_road))
-                effective_lat_threshold = lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
+                effective_lat_threshold = 2.5
+                #lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
                 if abs(lat_road) <= effective_lat_threshold:
                     if long_road < closest_dist:
                         closest_dist = long_road
                         lead_track = track
 
         return lead_track
+
+    def select_lead_track(
+            self, 
+            ego: EgoState, 
+            sensor_suite: SensorSuite, 
+            merge_threshold: float = 25.0
+        ) -> Track | None:
+        """
+        Selects the active lead vehicle track. If a merge point is within threshold, scans adjacent merging corridors for hazard vehicles and assigns them as lead.
+        """
+        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
+        # 1. Standard lead vehicle directly ahead
+        primary_lead = self.get_lead_track(ego, sensor_suite)
+
+        # 2. If within merge threshold, check adjacent merging lane
+        if dist_to_merge <= merge_threshold:
+            merge_hazard= self.get_merge_hazard_track(ego, sensor_suite, target_offset=self.target_offset)
+
+            if merge_hazard is not None:
+                # If both exist, select whichever vehicle is closer longitudinally
+                if primary_lead is not None:
+                    u_road, _ = ego.road_frame_vectors
+                    dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
+                    dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
+                    return primary_lead if dist_primary < dist_hazard else merge_hazard
+                return merge_hazard
+
+        return primary_lead
 
     def get_merge_hazard_track(self, ego: EgoState, sensor_suite: SensorSuite, target_offset: float = 0.0) -> Track | None:
         """
@@ -103,9 +132,9 @@ class BehaviorPlanner:
             lat_road = np.dot(d_vec, n_road)
 
             # Scan corridor including current lane and target merging lane offset
-            in_merge_corridor = (abs(lat_road) <= 1.8) or (abs(lat_road - target_offset) <= 1.8)
+            in_merge_corridor = (abs(lat_road) <= 2.5) or (abs(lat_road - target_offset) <= 2.5)
 
-            if long_road > 0.0 and in_merge_corridor:
+            if long_road > -10.0 and in_merge_corridor:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
@@ -152,13 +181,18 @@ class BehaviorPlanner:
         self.is_checking_merge = (dist_to_merge <= 25.0)
         if self.is_checking_merge:
             # Preemptively check adjacent lane clearance via SensorSuite
-            clearance = sensor_suite.is_lane_change_safe(
-                    ego=ego, 
-                    target_offset=self.target_offset, 
-                    step=step, 
-                    safety_gap_front=10.0, 
-                    safety_gap_rear=8.0
-                    )
+         #   clearance = sensor_suite.is_lane_change_safe(
+         #           ego=ego, 
+         #           target_offset=self.target_offset, 
+         #           step=step, 
+         #           safety_gap_front=10.0, 
+         #           safety_gap_rear=8.0
+         #           )
+            clearance = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
+                                         target_offset=self.target_offset,
+                                         safety_gap_front=10.0,
+                                         safety_gap_rear=8.0,
+                                         lane_tolerance=1.8)
             if not clearance.is_safe:
                 print(f" [Step {step}] Merge hazard detected within {dist_to_merge:.1f}m! Preemptively adjusting velocity.")
             
@@ -195,7 +229,13 @@ class BehaviorPlanner:
         if distance_traveled < self.start_distance:
             return self.state, current_path
 
-        lane_change_clearance_flags  = sensor_suite.is_lane_change_safe(ego=ego, target_offset=self.target_offset, step=step, safety_gap_front=10.0, safety_gap_rear=8.0)
+        #lane_change_clearance_flags  = sensor_suite.is_lane_change_safe(ego=ego, target_offset=self.target_offset, step=step, safety_gap_front=10.0, safety_gap_rear=8.0)
+        lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
+                                         target_offset=self.target_offset,
+                                         safety_gap_front=10.0,
+                                         safety_gap_rear=8.0,
+                                         lane_tolerance=1.8)
+
 
         if lane_change_clearance_flags.is_safe:
             self.state = "LANE_CHANGE"

@@ -104,10 +104,9 @@ for step in range(NUM_STEPS):
     )
 
     # Check Lane Clearance using Fused Track/Sensor Checks
-    clearance = sensor_suite.is_lane_change_safe(
+    clearance = sensor_suite.is_lane_change_safe_from_tracks(
         ego=ego,
         target_offset=lane_width,
-        step=step,
         safety_gap_front=10.0,
         safety_gap_rear=8.0
     )
@@ -122,7 +121,10 @@ for step in range(NUM_STEPS):
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
     else:
         # Extract closest confirmed Kalman track directly from BehaviorPlanner
-        lead_track = planner.get_lead_track(ego=ego, sensor_suite=sensor_suite)
+       # lead_track = planner.get_lead_track(ego=ego, sensor_suite=sensor_suite)
+       # merge_hazard = planner.get_merge_hazard_track(ego=ego, sensor_suite=sensor_suite)
+       # lead_track = lead_track if merge_hazard is None else merge_hazard
+        lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
         if lead_track is not None:
