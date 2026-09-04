@@ -5,7 +5,7 @@ from src.ego_state import EgoState
 from src.radar import RadarSensor
 from src.tracker import Track, TrackState
 from src.ultrasonic import SideUltrasonicSensor
-
+import numpy as np
 
 class MultiObjectTracker:
     """
@@ -231,34 +231,68 @@ class SensorSuite:
         )
         return self.latest_perception.lead_target
 
-    def is_lane_change_safe(
+  #  def is_lane_change_safe(
+  #      self,
+  #      ego: EgoState,
+  #      target_offset: float,
+  #      step: int,
+  #      safety_gap_front: float = 10.0,
+  #      safety_gap_rear: float = 8.0
+  #  ) -> LaneClearanceResult:
+  #      obstacles = self.latest_perception.filtered_obstacles or []
+
+  #      radar_clear = self.front_radar.is_adjacent_lane_clear(
+  #          ego=ego,
+  #          surrounding_obstacles=obstacles,
+  #          step=step,
+  #          target_lane_offset=target_offset,
+  #          safety_gap_front=safety_gap_front,
+  #          safety_gap_rear=safety_gap_rear,
+  #          rear_radar=self.rear_radar
+  #      )
+
+  #      active_uss = self.uss_left if target_offset > 0 else self.uss_right
+  #      uss_clear = (
+  #          active_uss.is_adjacent_lane_clear(ego, obstacles, step, target_offset)
+  #          if active_uss is not None else True
+  #      )
+
+  #      return LaneClearanceResult(
+  #          is_safe=radar_clear and uss_clear,
+  #          radar_clear=radar_clear,
+  #          uss_clear=uss_clear
+  #      )
+
+    def is_lane_change_safe_from_tracks(
         self,
         ego: EgoState,
         target_offset: float,
-        step: int,
-        safety_gap_front: float = 10.0,
-        safety_gap_rear: float = 8.0
+        safety_gap_front: float = 12.0,
+        safety_gap_rear: float = 8.0,
+        lane_tolerance: float = 1.8
     ) -> LaneClearanceResult:
-        obstacles = self.latest_perception.filtered_obstacles or []
+        """
+        Evaluates lane clearance using filtered tracking states instead of raw scans.
+        """
+        u_hat, n_hat = ego.road_frame_vectors
+        confirmed_tracks = self.tracker.confirmed_tracks
 
-        radar_clear = self.front_radar.is_adjacent_lane_clear(
-            ego=ego,
-            surrounding_obstacles=obstacles,
-            step=step,
-            target_lane_offset=target_offset,
-            safety_gap_front=safety_gap_front,
-            safety_gap_rear=safety_gap_rear,
-            rear_radar=self.rear_radar
-        )
+        lane_clear = True
+        for track in confirmed_tracks:
+            d_vec = track.position - ego.position
+            longitudinal_dist = float(np.dot(d_vec, u_hat))
+            lateral_dist = float(np.dot(d_vec, n_hat))
 
-        active_uss = self.uss_left if target_offset > 0 else self.uss_right
-        uss_clear = (
-            active_uss.is_adjacent_lane_clear(ego, obstacles, step, target_offset)
-            if active_uss is not None else True
-        )
+            # Check if track falls in target lane and safety margin window
+            is_in_target_lane = abs(lateral_dist - target_offset) <= lane_tolerance
+            is_in_safety_window = -safety_gap_rear <= longitudinal_dist <= safety_gap_front
+
+            if is_in_target_lane and is_in_safety_window:
+                lane_clear = False
+                break
 
         return LaneClearanceResult(
-            is_safe=radar_clear and uss_clear,
-            radar_clear=radar_clear,
-            uss_clear=uss_clear
+            is_safe=lane_clear,
+            radar_clear=lane_clear,
+            uss_clear=lane_clear
         )
