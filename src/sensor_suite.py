@@ -81,6 +81,7 @@ class PerceptionState:
     uss_scans: dict | None = None
     filtered_obstacles: list | None = None
     tracks: list[Track] = field(default_factory=list)
+    merge_hazard: Track | None = None
 
 
 @dataclass
@@ -122,6 +123,11 @@ class SensorSuite:
     def lead_target(self) -> tuple | None:
         return self.latest_perception.lead_target
 
+    
+    @property
+    def merge_hazard(self) -> Track | None:
+        return self.latest_perception.merge_hazard
+    
     @property
     def tracked_objects(self) -> list[Track]:
         """List[Track]: Confirmed active tracked objects from Kalman pipeline."""

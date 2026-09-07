@@ -1,5 +1,3 @@
-# src/behavior_planner.py
-import numpy as np
 
 from src.ego_state import EgoState
 from src.lateral_controller import (
@@ -9,7 +7,7 @@ from src.lateral_controller import (
 from src.map import MapModule
 from src.sensor_suite import SensorSuite
 from src.tracker import Track
-
+import numpy as np
 
 class BehaviorPlanner:
     """High-level state machine responsible for managing autonomous driving behaviors.
@@ -105,11 +103,11 @@ class BehaviorPlanner:
 
             if merge_hazard is not None:
                 # If both exist, select whichever vehicle is closer longitudinally
-                if primary_lead is not None:
-                    u_road, _ = ego.road_frame_vectors
-                    dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
-                    dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
-                    return primary_lead if dist_primary < dist_hazard else merge_hazard
+                #if primary_lead is not None:
+                    #u_road, _ = ego.road_frame_vectors
+                    #dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
+                    #dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
+                    #return primary_lead if dist_primary < dist_hazard else merge_hazard
                 return merge_hazard
 
         return primary_lead
@@ -138,6 +136,7 @@ class BehaviorPlanner:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
+                    sensor_suite.latest_perception.merge_hazard = track
 
         return hazard_track
 
