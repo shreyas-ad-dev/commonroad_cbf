@@ -284,7 +284,7 @@ def render_frame(
                     fontsize=8,
                     fontweight="bold",
                     ha="center",
-                    bbox=dict(boxstyle="round,pad=0.15", facecolor="#111111", alpha=0.8),
+                    bbox={'boxstyle' :"round,pad=0.15", 'facecolor' :"#111111", 'alpha' :0.8},
                     zorder=120
                 )
                 if hazard_track is not None and np.linalg.norm(hazard_track.position - obs_center) < 3.0:
@@ -300,7 +300,7 @@ def render_frame(
                             fontsize=8,
                             fontweight="bold",
                             ha="center",
-                            bbox=dict(boxstyle="round,pad=0.2", facecolor="#B71C1C", alpha=0.9),
+                            bbox={'boxstyle': "round,pad=0.2", 'facecolor': "#B71C1C", 'alpha': 0.9},
                             zorder=125
                         )
                 break

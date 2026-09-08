@@ -1,4 +1,6 @@
 
+import numpy as np
+
 from src.ego_state import EgoState
 from src.lateral_controller import (
     #    extract_target_lanelet_path,
@@ -7,7 +9,7 @@ from src.lateral_controller import (
 from src.map import MapModule
 from src.sensor_suite import SensorSuite
 from src.tracker import Track
-import numpy as np
+
 
 class BehaviorPlanner:
     """High-level state machine responsible for managing autonomous driving behaviors.
@@ -74,7 +76,7 @@ class BehaviorPlanner:
 
             # Check if track is ahead in lane corridor
             if long_road > 0.0:
-                v_lat = float(np.dot(track.velocity, n_road))
+                #v_lat = float(np.dot(track.velocity, n_road))
                 effective_lat_threshold = 2.5
                 #lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
                 if abs(lat_road) <= effective_lat_threshold:
