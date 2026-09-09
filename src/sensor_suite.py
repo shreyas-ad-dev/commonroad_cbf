@@ -57,7 +57,7 @@ class MultiObjectTracker:
         # 5. Spawn new tentative tracks for unmatched detections
         for det_idx in unmatched_dets:
             new_track = Track(
-                track_id=self._next_track_id,
+                track_id=detections[det_idx].obstacle_id,
                 detection=detections[det_idx],
                 dt=self.dt,
                 confirm_hits=self.confirm_hits,
@@ -213,15 +213,15 @@ class SensorSuite:
         confirmed_tracks = self.tracker.process_step(raw_detections)
 
         # 5. Cache Lead Target
-        lead_target = self.front_radar.track_lead_vehicle(
-            ego=ego,
-            obstacles=nearby_obstacles,
-            step=step,
-            target_offset=target_offset
-        )
+       # lead_target = self.front_radar.track_lead_vehicle(
+       #     ego=ego,
+       #     obstacles=nearby_obstacles,
+       #     step=step,
+       #     target_offset=target_offset
+       # )
 
         self.latest_perception = PerceptionState(
-            lead_target=lead_target,
+            #lead_target=lead_target,
             radar_scans=radar_results,
             uss_scans=uss_results,
             filtered_obstacles=nearby_obstacles,
