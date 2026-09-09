@@ -57,7 +57,7 @@ class MultiObjectTracker:
         # 5. Spawn new tentative tracks for unmatched detections
         for det_idx in unmatched_dets:
             new_track = Track(
-                track_id=detections[det_idx].obstacle_id,
+                track_id=self._next_track_id,
                 detection=detections[det_idx],
                 dt=self.dt,
                 confirm_hits=self.confirm_hits,

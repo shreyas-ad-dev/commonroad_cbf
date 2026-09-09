@@ -128,6 +128,7 @@ for step in range(NUM_STEPS):
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
         if lead_track is not None:
+            print(f" step:{step} -  Lead Track: {lead_track} ")
             u_road, _ = ego.road_frame_vectors
             d_vec = lead_track.position - ego.position
             long_dist = float(np.dot(d_vec, u_road))

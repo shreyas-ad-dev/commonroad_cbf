@@ -110,8 +110,10 @@ class BehaviorPlanner:
                     #dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
                     #dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
                     #return primary_lead if dist_primary < dist_hazard else merge_hazard
+                sensor_suite.latest_perception.lead_target = merge_hazard 
                 return merge_hazard
 
+        sensor_suite.latest_perception.lead_target = primary_lead 
         return primary_lead
 
     def get_merge_hazard_track(self, ego: EgoState, sensor_suite: SensorSuite, target_offset: float = 0.0) -> Track | None:
@@ -205,10 +207,10 @@ class BehaviorPlanner:
             self.start_x = ego.x
             self.start_y = ego.y
 
-
-        if self.mode == "MAP_FOLLOW":
-            updated_path = self.map_module.extract_target_lanelet_path( ego )
-            return self.state, updated_path
+#
+#        if self.mode == "MAP_FOLLOW":
+#            updated_path = self.map_module.extract_target_lanelet_path( ego )
+#            return self.state, updated_path
 
         if self.state == "LANE_CHANGE":
             _, n_road = ego.road_frame_vectors

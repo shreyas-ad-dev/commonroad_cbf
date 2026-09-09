@@ -112,8 +112,9 @@ def render_frame(
     left_tracked_ids = sensor_suite.left_tracked_ids
     right_tracked_ids = sensor_suite.right_tracked_ids
 
-    lead_target = sensor_suite.lead_target
-    lead_target_id = lead_target[3] if lead_target is not None else None
+    lead_target = sensor_suite.latest_perception.lead_target
+    #lead_target_id = lead_target[3] if lead_target is not None else None
+    lead_target_id = lead_target.associated_obstacle_id if lead_target is not None else None
 
     _, ax = plt.subplots(figsize=(12, 7))
     renderer = MPRenderer(ax=ax)
@@ -383,7 +384,7 @@ def render_frame(
         ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_right.range_max:.0f}m, {uss_right.fov_deg:.0f}°)")
 
 
-    if lead_target_id is not None:
+    if lead_target is not None:
         ax.plot([], [], color="red", marker="X", ls="", markersize=9, label="Lead Target Vehicle")
 
     if front_tracked_ids:
