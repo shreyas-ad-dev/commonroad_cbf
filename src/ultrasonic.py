@@ -179,6 +179,7 @@ class SideUltrasonicSensor(BaseSensor):
                             sensor_id=self.sensor_id,
                             timestamp=timestamp,
                             z=np.array([global_x, global_y], dtype=np.float64),
+                            obstacle_id=obs.obstacle_id,
                             R=self.R
                         )
                     )
