@@ -140,8 +140,9 @@ class BehaviorPlanner:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
-                    sensor_suite.latest_perception.merge_hazard = track
 
+
+        sensor_suite.latest_perception.merge_hazard = hazard_track
         return hazard_track
 
     def update_plan(self,
@@ -181,7 +182,7 @@ class BehaviorPlanner:
 #        merge_threshold = max(ego.velocity * t_lookahead + d_min, 15.0)
 #        self.is_checking_merge = (dist_to_merge <= merge_threshold)
 
-        self.is_checking_merge = (dist_to_merge <= 25.0)
+        self.is_checking_merge = (dist_to_merge <= ego.velocity*2.3)
         if self.is_checking_merge:
             # Preemptively check adjacent lane clearance via SensorSuite
          #   clearance = sensor_suite.is_lane_change_safe(
