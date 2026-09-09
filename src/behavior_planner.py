@@ -134,9 +134,13 @@ class BehaviorPlanner:
             lat_road = np.dot(d_vec, n_road)
 
             # Scan corridor including current lane and target merging lane offset
-            in_merge_corridor = (abs(lat_road) <= 2.5) or (abs(lat_road - target_offset) <= 2.5)
+            if target_offset==0.0:
+                in_merge_corridor = (abs(lat_road) <= 3.5) 
+            else:
+                in_merge_corridor = (abs(lat_road - target_offset) <= 2)
 
-            if long_road > -10.0 and in_merge_corridor:
+            # < ego.velocity*3  
+            if (-10 < long_road ) and in_merge_corridor:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
