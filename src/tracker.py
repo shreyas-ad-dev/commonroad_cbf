@@ -19,6 +19,7 @@ class Detection:
     timestamp: float
     # Measurement vector: [x_local, y_local] 
     z: np.ndarray
+    obstacle_id: int
     # Measurement noise covariance matrix (2x2)
     R: np.ndarray
 
