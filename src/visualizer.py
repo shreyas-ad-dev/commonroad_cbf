@@ -254,6 +254,27 @@ def render_frame(
         alpha=zone_alpha, linestyle="--", linewidth=1.5, zorder=80
     ))
 
+    merge_horizon = 2.3 * ego.velocity
+    horizon_end = front_pos + merge_horizon * ego.heading_vector
+
+    ax.plot(
+        [front_pos[0], horizon_end[0]],
+        [front_pos[1], horizon_end[1]],
+        color="#FF007F",
+        linestyle="--",
+        linewidth=2.0,
+        zorder=85,
+        label=f"Merge Horizon ({merge_horizon:.1f}m)"
+    )
+    # Optional marker at the end of the horizon line
+    ax.plot(
+        horizon_end[0], horizon_end[1],
+        marker="o",
+        color="#FF007F",
+        markersize=5,
+        zorder=85
+    )
+
     # 4. Render Surrounding Vehicles
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
