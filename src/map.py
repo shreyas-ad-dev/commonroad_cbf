@@ -30,31 +30,91 @@ class MapModule:
 
     def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = 100.0) -> float:
         """
-        Computes distance to the next incoming lane merge or merging lanelet boundary.
+        Computes distance from ego's current position to the next upcoming lane merge.
+        Detects both ego's lane merging into another lane and another lane merging into ego's lane.
         """
         start_ids = self.lanelet_network.find_lanelet_by_position([ego.position])[0]
         if not start_ids:
             return float('inf')
 
-        curr_lnet = self.lanelet_network.find_lanelet_by_id(start_ids[0])
-        dist_accum = 0.0
+        # Handle potential tuple wrapper from find_lanelet_by_position
+        start_id = start_ids[0][0] if isinstance(start_ids[0], (list, tuple)) else start_ids[0]
+        curr_lnet = self.lanelet_network.find_lanelet_by_id(start_id)
+        
+        if not curr_lnet:
+            return float('inf')
+
+        # 1. Compute distance from ego position to the end of the initial lanelet
+        verts = np.array(curr_lnet.center_vertices)
+        dists_to_ego = np.linalg.norm(verts - ego.position, axis=1)
+        closest_idx = int(np.argmin(dists_to_ego))
+        
+        # Remaining distance inside starting lanelet
+        if closest_idx < len(verts) - 1:
+            remaining_verts = verts[closest_idx:]
+            dist_accum = float(np.sum(np.hypot(np.diff(remaining_verts[:, 0]), np.diff(remaining_verts[:, 1]))))
+        else:
+            dist_accum = 0.0
+
+        visited = {curr_lnet.lanelet_id}
 
         while curr_lnet and dist_accum < horizon_meters:
-            # Check if current lanelet receives adjacent merge or merges into another
+            # Check 1: Does the current lanelet itself merge into a target lanelet (multiple predecessors)?
             if hasattr(curr_lnet, 'predecessor') and len(curr_lnet.predecessor) > 1:
                 return max(0.0, dist_accum)
 
-            # Estimate length of current lanelet segment
-            verts = np.array(curr_lnet.center_vertices)
-            seg_len = float(np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1]))))
-            dist_accum += seg_len
-
+            # Check 2: Examine successors for convergence (e.g., another lane merging into this one)
             if curr_lnet.successor:
-                curr_lnet = self.lanelet_network.find_lanelet_by_id(curr_lnet.successor[0])
+                for succ_id in curr_lnet.successor:
+                    succ_lnet = self.lanelet_network.find_lanelet_by_id(succ_id)
+                    if succ_lnet and hasattr(succ_lnet, 'predecessor') and len(succ_lnet.predecessor) > 1:
+                        # Found a junction downstream where 2+ lanes converge
+                        return max(0.0, dist_accum)
+
+                # Move to the primary successor along the path
+                next_id = curr_lnet.successor[0]
+                if next_id in visited:
+                    break
+                visited.add(next_id)
+                curr_lnet = self.lanelet_network.find_lanelet_by_id(next_id)
+
+                if curr_lnet:
+                    # Accumulate full length of next segment
+                    seg_verts = np.array(curr_lnet.center_vertices)
+                    seg_len = float(np.sum(np.hypot(np.diff(seg_verts[:, 0]), np.diff(seg_verts[:, 1]))))
+                    dist_accum += seg_len
             else:
                 break
 
         return float('inf')
+
+   # def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = 100.0) -> float:
+   #     """
+   #     Computes distance to the next incoming lane merge or merging lanelet boundary.
+   #     """
+   #     start_ids = self.lanelet_network.find_lanelet_by_position([ego.position])[0]
+   #     if not start_ids:
+   #         return float('inf')
+
+   #     curr_lnet = self.lanelet_network.find_lanelet_by_id(start_ids[0])
+   #     dist_accum = 0.0
+
+   #     while curr_lnet and dist_accum < horizon_meters:
+   #         # Check if current lanelet receives adjacent merge or merges into another
+   #         if hasattr(curr_lnet, 'predecessor') and len(curr_lnet.predecessor) > 1:
+   #             return max(0.0, dist_accum)
+
+   #         # Estimate length of current lanelet segment
+   #         verts = np.array(curr_lnet.center_vertices)
+   #         seg_len = float(np.sum(np.hypot(np.diff(verts[:, 0]), np.diff(verts[:, 1]))))
+   #         dist_accum += seg_len
+
+   #         if curr_lnet.successor:
+   #             curr_lnet = self.lanelet_network.find_lanelet_by_id(curr_lnet.successor[0])
+   #         else:
+   #             break
+
+   #     return float('inf')
 
     def get_road_heading_at_position(self, position: np.ndarray | list[float]) -> float | None:
         """
