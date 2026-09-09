@@ -103,6 +103,8 @@ class Track:
         self.confirm_hits = confirm_hits
         self.max_age = max_age
 
+        self.associated_obstacle_id = detection.obstacle_id
+
     @property
     def position(self) -> np.ndarray:
         return self.kf.x[:2]
