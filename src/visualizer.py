@@ -254,27 +254,47 @@ def render_frame(
         alpha=zone_alpha, linestyle="--", linewidth=1.5, zorder=80
     ))
 
-    merge_horizon = 2.3 * ego.velocity
-    horizon_end = front_pos + merge_horizon * ego.heading_vector
+    merge_horizon_min = 2.3 * ego.velocity
+    min_horizon_end = front_pos + merge_horizon_min * ego.heading_vector
 
     ax.plot(
-        [front_pos[0], horizon_end[0]],
-        [front_pos[1], horizon_end[1]],
+        [front_pos[0], min_horizon_end[0]],
+        [front_pos[1], min_horizon_end[1]],
         color="#FF007F",
         linestyle="--",
         linewidth=2.0,
         zorder=85,
-        label=f"Merge Horizon ({merge_horizon:.1f}m)"
+        #label=f"Merge Horizon (min:{merge_horizon_min:.1f}m)"
     )
     # Optional marker at the end of the horizon line
     ax.plot(
-        horizon_end[0], horizon_end[1],
+        min_horizon_end[0], min_horizon_end[1],
         marker="o",
         color="#FF007F",
         markersize=5,
         zorder=85
     )
 
+    merge_horizon_max = 3 * ego.velocity
+    max_horizon_end = front_pos + merge_horizon_max * ego.heading_vector
+
+    ax.plot(
+        [front_pos[0], max_horizon_end[0]],
+        [front_pos[1], max_horizon_end[1]],
+        color="#33BB7F",
+        linestyle="--",
+        linewidth=2.0,
+        zorder=85,
+        #label=f"Merge Horizon (max:{merge_horizon_max:.1f}m)"
+    )
+    # Optional marker at the end of the horizon line
+    ax.plot(
+        max_horizon_end[0], max_horizon_end[1],
+        marker="o",
+        color="#33BB7F",
+        markersize=5,
+        zorder=85
+    )
     # 4. Render Surrounding Vehicles
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
@@ -391,31 +411,35 @@ def render_frame(
 
     ax.plot([], [], color="#00FF00", marker="s", ls="", markersize=8, label="Ego Vehicle")
 
+    ax.plot([], [], color="#FF007F", marker="o", ls="--", markersize=5, label=f"Merge Horizon (min:{merge_horizon_min:.1f}m)")
+
+    ax.plot([], [], color="#33BB7F", marker="o", ls="--", markersize=5, label=f"Merge Horizon (min:{merge_horizon_max:.1f}m)")
+
     ax.plot([], [], color=zone_color, linestyle="--", linewidth=1, label=f"CBF Buffer ({d_safe:.1f}m)")
 
-    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({front_radar.range_max:.0f}m, {front_radar.fov_deg:.0f}°)")
-    
-    if rear_radar is not None:
-        ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar.range_max:.0f}m, {rear_radar.fov_deg:.0f}°)")
-
-    if uss_left is not None:
-        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_left.range_max:.0f}m, {uss_left.fov_deg:.0f}°)")
-
-    if uss_right is not None:
-        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_right.range_max:.0f}m, {uss_right.fov_deg:.0f}°)")
-
+#    ax.plot([], [], color="#0099CC", linestyle="-", label=f"Front Radar ({front_radar.range_max:.0f}m, {front_radar.fov_deg:.0f}°)")
+#    
+#    if rear_radar is not None:
+#        ax.plot([], [], color="#7B1FA2", linestyle="-", label=f"Rear Radar ({rear_radar.range_max:.0f}m, {rear_radar.fov_deg:.0f}°)")
+#
+#    if uss_left is not None:
+#        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_left.range_max:.0f}m, {uss_left.fov_deg:.0f}°)")
+#
+#    if uss_right is not None:
+#        ax.plot([], [], color="#FFA000", linestyle="-", label=f"Ultrasonic Sensor ({uss_right.range_max:.0f}m, {uss_right.fov_deg:.0f}°)")
+#
 
     if lead_target is not None:
         ax.plot([], [], color="red", marker="X", ls="", markersize=9, label="Lead Target Vehicle")
 
-    if front_tracked_ids:
-        ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")
-
-    if rear_tracked_ids:
-        ax.plot([], [], color="#E040FB", linestyle="-", linewidth=2.5, label="Rear Tracked Vehicle")
-
-    if left_tracked_ids or right_tracked_ids:
-        ax.plot([], [], color="#FFB300", linestyle="-", linewidth=2.5, label="Side USS Tracked")
+#    if front_tracked_ids:
+#        ax.plot([], [], color="#00E5FF", linestyle="-", linewidth=2.5, label="Front Tracked Vehicle")
+#
+#    if rear_tracked_ids:
+#        ax.plot([], [], color="#E040FB", linestyle="-", linewidth=2.5, label="Rear Tracked Vehicle")
+#
+#    if left_tracked_ids or right_tracked_ids:
+#        ax.plot([], [], color="#FFB300", linestyle="-", linewidth=2.5, label="Side USS Tracked")
        
     if show_trajectories:
         ax.plot([], [], color="black", linestyle=":", label="Obstacle Trajectory")
