@@ -139,8 +139,7 @@ class BehaviorPlanner:
             else:
                 in_merge_corridor = (abs(lat_road - target_offset) <= 2)
 
-            # < ego.velocity*3  
-            if (-10 < long_road ) and in_merge_corridor:
+            if (-10 < long_road  < ego.velocity*3  ) and in_merge_corridor:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
