@@ -104,6 +104,7 @@ class Track:
         self.max_age = max_age
 
         self.associated_obstacle_id = detection.obstacle_id
+        self.associated_sensor_id = detection.sensor_id
 
     @property
     def position(self) -> np.ndarray:
@@ -133,3 +134,22 @@ class Track:
         """Handle steps where no detection was associated with this track."""
         if self.time_since_update > self.max_age:
             self.state = TrackState.DELETED
+
+    def serialize(self):
+        logged_track_position = self.position
+        logged_track_velocity = self.velocity
+        return {
+                "id": self.track_id,
+                "obs_id": self.associated_obstacle_id,
+                "sensor_id": self.associated_sensor_id,
+                "state": self.state.name,
+                "age": self.age,
+                "hits": self.hits,
+                "confirm_hits": self.confirm_hits,
+                "time_since_update": self.time_since_update,
+                "x": logged_track_position[0],
+                "y": logged_track_position[1],
+                "vx": logged_track_velocity[0],
+                "vy": logged_track_velocity[1],
+                }
+
