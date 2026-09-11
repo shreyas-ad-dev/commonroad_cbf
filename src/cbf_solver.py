@@ -191,3 +191,13 @@ class CBFQPSolver:
                 return self.a_min
         except (ValueError, RuntimeError):
             return self.a_min
+
+    def get_log_data(self) -> dict:
+        return {
+                "gamma": self.gamma,
+                "d_min": self.d_min,
+                "tau": self.tau,
+                "a_min": self.a_min,
+                "a_max": self.a_max,
+                "use_cvxpy": self.use_cvxpy,
+                }

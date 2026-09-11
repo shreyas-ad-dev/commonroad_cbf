@@ -203,7 +203,9 @@ for step in range(NUM_STEPS):
             step=step,
             timestamp=step * scenario.dt,
             payload={
-                "ego":ego.get_log_data()
+                "ego":ego.get_log_data(),
+                "cbf": cbf_solver.get_log_data(),
+                "planner": planner.get_log_data(),
                 }
             )
 
