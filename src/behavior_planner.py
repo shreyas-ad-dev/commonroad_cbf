@@ -58,6 +58,10 @@ class BehaviorPlanner:
         self.start_y = None
         self.lane_change_start_pos = None
 
+        self._cached_lead_track = None
+        self._cached_merge_hazard = None
+        self._cached_selected_lead = None
+
     def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite, lateral_margin: float = 3.2) -> Track | None:
         """Identifies the closest tracked lead vehicle in Ego's current corridor using tracked states."""
         tracks = sensor_suite.tracked_objects
@@ -84,6 +88,7 @@ class BehaviorPlanner:
                         closest_dist = long_road
                         lead_track = track
 
+        self._cached_lead_track = lead_track
         return lead_track
 
     def select_lead_track(
@@ -111,9 +116,11 @@ class BehaviorPlanner:
                     #dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
                     #return primary_lead if dist_primary < dist_hazard else merge_hazard
                 sensor_suite.latest_perception.lead_target = merge_hazard 
+                self._cached_selected_lead = merge_hazard
                 return merge_hazard
 
         sensor_suite.latest_perception.lead_target = primary_lead 
+        self._cached_selected_lead = primary_lead
         return primary_lead
 
     def get_merge_hazard_track(self, ego: EgoState, sensor_suite: SensorSuite, target_offset: float = 0.0) -> Track | None:
@@ -146,6 +153,7 @@ class BehaviorPlanner:
 
 
         sensor_suite.latest_perception.merge_hazard = hazard_track
+        self._cached_merge_hazard = hazard_track
         return hazard_track
 
     def update_plan(self,
@@ -256,4 +264,22 @@ class BehaviorPlanner:
             return self.state, new_path
 
         return self.state, current_path
+
+    def get_log_data(self) -> dict:
+        logged_lead_track = self._cached_lead_track.serialize() if self._cached_lead_track is not None else self._cached_lead_track
+        logged_merge_track = self._cached_merge_hazard.serialize() if self._cached_merge_hazard is not None else self._cached_merge_hazard
+        logged_selected_lead = self._cached_selected_lead.serialize() if self._cached_selected_lead is not None else self._cached_selected_lead
+
+        return {
+                "mode": self.mode,
+                "state": self.state,
+                "target_offset": self.target_offset,
+                "start_distance": self.start_distance,
+                "start_x": self.start_x,
+                "start_y": self.start_y, 
+                "lane_change_start_pos": self.lane_change_start_pos,
+                "lead_track": logged_lead_track,
+                "merge_hazard": logged_merge_track,
+                "selected_lead": logged_selected_lead        }
+
 
