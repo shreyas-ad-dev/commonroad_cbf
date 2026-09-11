@@ -213,3 +213,11 @@ class EgoState:
 
         # 4. Commit updated speed
         self.velocity = v_next
+
+    def get_log_data(self) -> dict:
+        return {
+                "x": self.x,
+                "y": self.y,
+                "velocity": self.velocity
+                }
+

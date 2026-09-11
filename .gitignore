@@ -2,3 +2,4 @@
 !assets/*.gif
 *.pyc
 archive_gifs/
+*.jsonl

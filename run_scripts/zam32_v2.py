@@ -8,6 +8,7 @@ import numpy as np
 
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.datalogger import DataLogger
 from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import StanleyController
 from src.map import MapModule
@@ -25,9 +26,10 @@ SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_32_T-1.xml"
 GIF_NAME = "zam_zip32_v2_merge.gif"
 NUM_STEPS = 100
-DESIRED_SPEED = 16  # High target speed to force late merge conflicts
+DESIRED_SPEED = 15  # High target speed to force late merge conflicts
 
 FRAMES_DIR = PROJECT_ROOT / "frames_zam32"
+JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------
@@ -80,6 +82,8 @@ lane_width = map_module.get_current_lane_width(ego=ego)
 
 # Behavior Planner configured for map target follow mode
 planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+
+logger = DataLogger(output_path=JSON_PATH)
 target_path = map_module.extract_target_lanelet_path(ego)
 
 has_collided = False
@@ -104,13 +108,13 @@ for step in range(NUM_STEPS):
     )
 
     # Check Lane Clearance using Fused Track/Sensor Checks
-    clearance = sensor_suite.is_lane_change_safe_from_tracks(
-        ego=ego,
-        target_offset=lane_width,
-        safety_gap_front=10.0,
-        safety_gap_rear=8.0
-    )
-    target_clear = clearance.is_safe
+#    clearance = sensor_suite.is_lane_change_safe_from_tracks(
+#        ego=ego,
+#        target_offset=lane_width,
+#        safety_gap_front=10.0,
+#        safety_gap_rear=8.0
+#    )
+#    target_clear = clearance.is_safe
 
     # 3. Lead Track Selection & CBF Safety Control
     if has_collided:
@@ -134,7 +138,7 @@ for step in range(NUM_STEPS):
             long_dist = float(np.dot(d_vec, u_road))
             h_val = cbf_solver.compute_barrier(long_dist, ego.velocity)
 
-            v_target_des = DESIRED_SPEED if target_clear else min(DESIRED_SPEED, float(np.hypot(lead_track.velocity[0], lead_track.velocity[1])) - 2.0)
+            v_target_des = DESIRED_SPEED #if target_clear else min(DESIRED_SPEED, float(np.hypot(lead_track.velocity[0], lead_track.velocity[1])) - 2.0)
 
             # Solve safe control acceleration using filtered track state estimate
             u_control = cbf_solver.solve_from_track(
@@ -195,6 +199,15 @@ for step in range(NUM_STEPS):
     )
     frame_files.append(frame_path)
 
+    logger.log_step(
+            step=step,
+            timestamp=step * scenario.dt,
+            payload={
+                "ego":ego.get_log_data()
+                }
+            )
+
+logger.close()
 # -----------------------------------------------------------------------------
 # 4. GIF Generation & Cleanup
 # -----------------------------------------------------------------------------
