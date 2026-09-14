@@ -120,12 +120,15 @@ class MapModule:
         """
         Computes the road heading angle from the centerline of the nearest lanelet.
 
+        Identifies the primary lanelet at or near the given position and evaluates the tangent angle (in radians) along the closest centerline segment.
+
         Args:
             position (np.ndarray | list[float]): 2D world position [x, y] in meters.
 
         Returns:
             float | None: Heading angle in radians within [-pi, pi], or None if no lanelet is found.
         """
+
         position = np.array(position)
         lanelet_ids = self.lanelet_network.find_lanelet_by_position([position])[0]
 
