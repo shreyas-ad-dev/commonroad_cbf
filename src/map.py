@@ -160,13 +160,16 @@ class MapModule:
         """
         Computes the local lane width surrounding the Ego vehicle's current position.
 
+        Identifies the active lanelet and measures the average Euclidean distance between corresponding vertices of its left and right boundaries.
+
         Args:
             ego (EgoState): Current state of the Ego vehicle.
-            default_width (float, optional): Fallback lane width in meters. Defaults to 3.5.
+            default_width (float, optional): Fallback lane width in meters if no lanelet is found. Defaults to 3.5.
 
         Returns:
             float: Mean local lane width in meters.
         """
+
         lanelet_ids = self.lanelet_network.find_lanelet_by_position([ego.position])[0]
 
         if not lanelet_ids:
