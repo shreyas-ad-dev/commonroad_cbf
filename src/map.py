@@ -196,6 +196,11 @@ class MapModule:
         Extracts a sequence of lanelets connecting Ego to the goal using BFS,
         chaining centerlines and densely resampling waypoints.
 
+        Traverses successor lanelets in a CommonRoad scenario until the cumulative length reaches 
+    or exceeds the target horizon, then densely resamples the path points every 0.5 meters.
+
+
+
         Args:
             ego (EgoState): Current state of the Ego vehicle.
             horizon_meters (float, optional): Total longitudinal distance forward. Defaults to 200.0.
