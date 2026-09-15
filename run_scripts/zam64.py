@@ -9,13 +9,9 @@ import numpy as np
 
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.datalogger import DataLogger
 from src.ego_state import EgoState, get_car_polygon
-from src.lateral_controller import (
-    StanleyController,
-#    extract_target_lanelet_path,
-#    get_current_lane_width,
-#    get_road_heading_at_position,
-)
+from src.lateral_controller import StanleyController
 from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
@@ -34,6 +30,7 @@ NUM_STEPS = 100
 DESIRED_SPEED = 15.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_zam"
+JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------
@@ -56,23 +53,32 @@ ego = EgoState(
     wheelbase=ego_params.get("wheelbase", 2.8)
 )
 
-lane_width = get_current_lane_width(scenario, ego=ego)
-ego.y = ego.y - lane_width
 
-print(f" Loaded Scenario: {scenario.scenario_id}")
-print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
 
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
 # -----------------------------------------------------------------------------
 map_module = MapModule(scenario=scenario, planning_problem_set=planning_set)
 
+lane_width = map_module.get_current_lane_width(ego=ego)
+ego.y = ego.y - lane_width
+
+print(f" Loaded Scenario: {scenario.scenario_id}")
+print(f" Ego Initial Position: ({ego_params['x']:.2f}, {ego_params['y']:.2f})")
+
 front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
 rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
 uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
 uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right")
 
-sensor_suite = SensorSuite( front_radar=front_radar, rear_radar=rear_radar, uss_left=uss_left, uss_right=uss_right)
+sensor_suite = SensorSuite(
+        front_radar=front_radar,
+        rear_radar=rear_radar,
+        uss_left=uss_left,
+        uss_right=uss_right,
+        dt=scenario.dt
+        )
+
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
@@ -80,6 +86,8 @@ lane_width = map_module.get_current_lane_width(ego=ego)
 #ego.y = ego.y - lane_width
 
 planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+
+logger = DataLogger(output_path=JSON_PATH)
 target_path = map_module.extract_target_lanelet_path(ego=ego)
 
 has_collided = False
@@ -123,15 +131,19 @@ for step in range(NUM_STEPS):
         sensor_suite.clear_tracking()
         h_val = None
     else:
-        lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=eval_offset)
+        #lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=eval_offset)
+        lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
-        if lead_target is not None:
-            target_x, target_y, target_v, target_id, x_local = lead_target
-            h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
-            u_control = cbf_solver.solve(
-                    longitudinal_dist=x_local,
-                    v_ego=ego.velocity,
-                    v_target=target_v,
+
+        if lead_track is not None:
+            u_road, _ = ego.road_frame_vectors
+            d_vec = lead_track.position - ego.position
+            long_dist = float(np.dot(d_vec, u_road))
+
+            h_val = cbf_solver.compute_barrier(long_dist, ego.velocity)
+            u_control = cbf_solver.solve_from_track(
+                    ego=ego,
+                    lead_track=lead_track,
                     v_des=DESIRED_SPEED,
                     dt=scenario.dt,
                     )
@@ -184,6 +196,20 @@ for step in range(NUM_STEPS):
         show_trajectories=SHOW_TRAJECTORIES,
     )
     frame_files.append(frame_path)
+
+    logger.log_step(
+            step=step,
+            timestamp=step * scenario.dt,
+            payload={
+                "ego":ego.get_log_data(),
+                "cbf": cbf_solver.get_log_data(),
+                "planner": planner.get_log_data(),
+                "steering": stanley_ctrl.get_log_data()
+                }
+            )
+
+logger.close()
+
 
 # -----------------------------------------------------------------------------
 # 4. GIF Generation & Cleanup
