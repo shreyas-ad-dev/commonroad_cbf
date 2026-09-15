@@ -206,6 +206,7 @@ for step in range(NUM_STEPS):
                 "ego":ego.get_log_data(),
                 "cbf": cbf_solver.get_log_data(),
                 "planner": planner.get_log_data(),
+                "steering": stanley_ctrl.get_log_data()
                 }
             )
 
