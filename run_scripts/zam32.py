@@ -8,13 +8,9 @@ import numpy as np
 
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.datalogger import DataLogger
 from src.ego_state import EgoState, get_car_polygon
-from src.lateral_controller import (
-    StanleyController,
-    #extract_target_lanelet_path,
-    #get_current_lane_width,
-    #get_road_heading_at_position,
-)
+from src.lateral_controller import StanleyController
 from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
@@ -28,11 +24,12 @@ from src.visualizer import render_frame
 # -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_32_T-1.xml"
-GIF_NAME = "zam_zip32_merge.gif"
+GIF_NAME = "zam_zip32_v2_merge.gif"
 NUM_STEPS = 100
-DESIRED_SPEED = 14.5  # High target speed to force late merge conflicts
+DESIRED_SPEED = 15  # High target speed to force late merge conflicts
 
 FRAMES_DIR = PROJECT_ROOT / "frames_zam32"
+JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------
@@ -63,20 +60,30 @@ print(f" Ego Initial Position: ({ego.x:.2f}, {ego.y:.2f})")
 # -----------------------------------------------------------------------------
 map_module = MapModule(scenario=scenario, planning_problem_set=planning_set)
 
-front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front")
-rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear")
-uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left")
-uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right")
+# Equipped sensors with measurement noise (noise_std) for tracking evaluation
+front_radar = RadarSensor(range_max=70.0, fov_deg=60.0, mount_position="front", noise_std=0.3)
+rear_radar = RadarSensor(range_max=50.0, fov_deg=80.0, mount_position="rear", noise_std=0.3)
+uss_left = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="left", noise_std=0.1)
+uss_right = SideUltrasonicSensor(range_max=8.0, fov_deg=100.0, side="right", noise_std=0.1)
 
-sensor_suite = SensorSuite( front_radar=front_radar, rear_radar=rear_radar, uss_left=uss_left, uss_right=uss_right)
+# SensorSuite initializes internal MultiObjectTracker (Kalman Filter + Hungarian Matching)
+sensor_suite = SensorSuite(
+    front_radar=front_radar,
+    rear_radar=rear_radar,
+    uss_left=uss_left,
+    uss_right=uss_right,
+    dt=scenario.dt
+)
 
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0, wheelbase=ego.wheelbase)
 
 lane_width = map_module.get_current_lane_width(ego=ego)
 
-# Behavior Planner configured for target lane merge (+lane_width)
+# Behavior Planner configured for map target follow mode
 planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+
+logger = DataLogger(output_path=JSON_PATH)
 target_path = map_module.extract_target_lanelet_path(ego)
 
 has_collided = False
@@ -89,11 +96,10 @@ frame_files = []
 # 3. Main Simulation Loop
 # -----------------------------------------------------------------------------
 for step in range(NUM_STEPS):
-    # State Machine Update
-
-
+    # 1. Update Perception Pipeline (Sensors -> Associations -> Kalman MultiObjectTracker)
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
+    # 2. High-Level Behavior Planning Update
     state, target_path = planner.update_plan(
         ego=ego,
         step=step,
@@ -101,56 +107,55 @@ for step in range(NUM_STEPS):
         current_path=target_path
     )
 
-    clearance = sensor_suite.is_lane_change_safe(
-        ego=ego,
-        target_offset=lane_width,
-        step=step,
-        safety_gap_front=10.0,
-        safety_gap_rear=8.0
-    )
-    target_clear = clearance.is_safe
-
+    # Check Lane Clearance using Fused Track/Sensor Checks
+#    clearance = sensor_suite.is_lane_change_safe_from_tracks(
+#        ego=ego,
+#        target_offset=lane_width,
+#        safety_gap_front=10.0,
+#        safety_gap_rear=8.0
 #    )
+#    target_clear = clearance.is_safe
 
-    # Lead Tracking via Radar
-    road_heading = map_module.get_road_heading_at_position(ego.position)
-    
-    if planner.state == "LANE_CHANGE" and planner.lane_change_start_pos is not None:
-        n_road = np.array([-np.sin(road_heading), np.cos(road_heading)])
-        lat_progress = np.dot(ego.position - planner.lane_change_start_pos, n_road)
-        remaining_offset = planner.target_offset - lat_progress
-        eval_offset = remaining_offset if abs(lat_progress) < 0.5 * abs(planner.target_offset) else 0.0
-    else:
-        # In MAP_FOLLOW / LANE_KEEP: track vehicles directly in current lane
-        eval_offset = 0.0
-
+    # 3. Lead Track Selection & CBF Safety Control
     if has_collided:
         u_control = 0.0
         steering_angle = 0.0
         sensor_suite.clear_tracking()
         h_val = None
+        d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
     else:
-        lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=eval_offset)
+        # Extract closest confirmed Kalman track directly from BehaviorPlanner
+       # lead_track = planner.get_lead_track(ego=ego, sensor_suite=sensor_suite)
+       # merge_hazard = planner.get_merge_hazard_track(ego=ego, sensor_suite=sensor_suite)
+       # lead_track = lead_track if merge_hazard is None else merge_hazard
+        lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
-        if lead_target is not None:
-            target_x, target_y, target_v, target_id, x_local = lead_target
-            h_val = cbf_solver.compute_barrier(x_local, ego.velocity)
-            u_control = cbf_solver.solve(
-                    longitudinal_dist=x_local,
-                    v_ego=ego.velocity,
-                    v_target=target_v,
-                    v_des=DESIRED_SPEED if target_clear else min(DESIRED_SPEED, target_v - 2.0),
-                    dt=scenario.dt,
+        if lead_track is not None:
+            print(f" step:{step} -  Lead Track: {lead_track} ")
+            u_road, _ = ego.road_frame_vectors
+            d_vec = lead_track.position - ego.position
+            long_dist = float(np.dot(d_vec, u_road))
+            h_val = cbf_solver.compute_barrier(long_dist, ego.velocity)
+
+            v_target_des = DESIRED_SPEED #if target_clear else min(DESIRED_SPEED, float(np.hypot(lead_track.velocity[0], lead_track.velocity[1])) - 2.0)
+
+            # Solve safe control acceleration using filtered track state estimate
+            u_control = cbf_solver.solve_from_track(
+                ego=ego,
+                lead_track=lead_track,
+                v_des=v_target_des,
+                dt=scenario.dt
             )
         else:
             h_val = None
             u_control = 0.5 * (DESIRED_SPEED - ego.velocity)
 
+        # Steering execution & Kinematics propagation
         steering_angle = stanley_ctrl.compute_steering(ego=ego, reference_path=target_path)
         ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
 
-    # Polygon Collision Checking & Perception Rendering States
+    # 4. Collision Checking & Render Preparation
     surrounding_render_states = []
 
     for obs in surrounding_obstacles:
@@ -176,7 +181,7 @@ for step in range(NUM_STEPS):
         is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
         surrounding_render_states.append((obs, obs_corners, is_hit))
 
-
+    # Frame output
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
         scenario=scenario,
@@ -194,6 +199,18 @@ for step in range(NUM_STEPS):
     )
     frame_files.append(frame_path)
 
+    logger.log_step(
+            step=step,
+            timestamp=step * scenario.dt,
+            payload={
+                "ego":ego.get_log_data(),
+                "cbf": cbf_solver.get_log_data(),
+                "planner": planner.get_log_data(),
+                "steering": stanley_ctrl.get_log_data()
+                }
+            )
+
+logger.close()
 # -----------------------------------------------------------------------------
 # 4. GIF Generation & Cleanup
 # -----------------------------------------------------------------------------
@@ -204,4 +221,4 @@ print(f"\n ZAM32 Simulation Complete! Output saved to: '{gif_path.name}'")
 if has_collided:
     print(f" Collision detected at Step {collision_step}.")
 else:
-    print(" SAFE! CBF Safety Control maintained nominal distance.")
+    print(" SAFE! CBF Safety Control maintained nominal distance with Kalman perception.")
