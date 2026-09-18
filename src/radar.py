@@ -110,56 +110,6 @@ class RadarSensor(BaseSensor):
         return ShapelyPolygon([p1, p2, p2_proj, p1_proj])
 
 
-#    def is_in_fov(self,
-#                  ego: EgoState,
-#                  obstacle: object,
-#                  step: int) -> tuple[bool, float, float, float]:
-#        """
-#        Checks if an obstacle's center or any of its bounding box corners fall within the Radar's FOV.
-#
-#        Args:
-#            ego (EgoState): Current state of the Ego vehicle.
-#            obstacle (object): Dynamic obstacle instance to evaluate.
-#            step (int): Current simulation time step index.
-#
-#        Returns:
-#            tuple[bool, float, float, float]: A tuple containing:
-#                - any_corner_in_fov (bool): True if any point falls inside detection cone.
-#                - min_dist (float): Minimum Euclidean distance across all points.
-#                - center_x_local (float): Obstacle center longitudinal offset in Ego frame.
-#                - center_y_local (float): Obstacle center lateral offset in Ego frame.
-#        """
-#        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
-#        if eval_data is None:
-#            return False, float('inf'), 0.0, 0.0
-#
-#        center_local, local_points = eval_data
-#        center_x_local, center_y_local = center_local[0], center_local[1]
-#
-#        min_dist = float('inf')
-#        any_corner_in_fov = False
-#
-#        for pt in local_points:
-#            x_local, y_local = pt[0], pt[1]
-#            dist = float(np.hypot(x_local, y_local))
-#
-#            min_dist = min(min_dist, dist)
-#
-#            if dist <= self.range_max:
-#                # Direction constraint based on mounting orientation
-#                is_valid_direction = (
-#                    (self.mount_position == "front" and x_local > 0.0) or
-#                    (self.mount_position == "rear" and x_local < 0.0)
-#                )
-#
-#                if is_valid_direction:
-#                    sensor_x = x_local if self.mount_position == "front" else -x_local
-#                    angle = np.arctan2(y_local, sensor_x)
-#                    if abs(angle) <= self.half_fov_rad:
-#                        any_corner_in_fov = True
-#
-#        return any_corner_in_fov, min_dist, center_x_local, center_y_local
-
     def scan(self,
              ego: EgoState,
              obstacles: list,
@@ -190,7 +140,6 @@ class RadarSensor(BaseSensor):
 
             valid_obstacles = []
             for obs in obstacles:
-                #in_fov, min_dist, center_x_local, center_y_local = self.is_in_fov(ego, obs, step)
                 eval_data = self.get_obstacle_center_and_corners_in_local(ego, obs, step)
                 st = obs.state_at_time(step)
                 if eval_data is None or st is None:
@@ -209,8 +158,6 @@ class RadarSensor(BaseSensor):
                         width=obs_width
                         )
 
-                #fov_data[obs.obstacle_id] = (in_fov, min_dist, center_x_local, center_y_local)
-                #in_fov = obs_poly.intersects(fov_wedge)
                 if obs_poly.intersects(fov_wedge):
                     dist_to_sensor = np.linalg.norm(st.position - sensor_pos)
                     valid_obstacles.append({
@@ -379,7 +326,6 @@ class RadarSensor(BaseSensor):
             if st is None or obs.obstacle_id not in scan_res["fov_data"]:
                 continue
 
-            #in_fov, min_dist, center_x_local, _ = scan_res["fov_data"][obs.obstacle_id]
             occ_data = scan_res["fov_data"][obs.obstacle_id]
             if not occ_data.in_fov:
                 continue
@@ -439,8 +385,6 @@ class RadarSensor(BaseSensor):
                 continue
 
             obs_id = obs.obstacle_id
-            #in_front_fov = front_scan["fov_data"].get(obs_id, (False,))[0]
-            #in_rear_fov = rear_scan["fov_data"].get(obs_id, (False,))[0] if rear_scan else False
             front_occ = front_scan["fov_data"].get(obs_id)
             rear_occ = rear_scan["fov_data"].get(obs_id) if rear_scan else None
 
