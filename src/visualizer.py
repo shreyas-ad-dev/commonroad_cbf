@@ -6,10 +6,27 @@ from commonroad.visualization.mp_renderer import MPRenderer
 from matplotlib import patches
 from shapely.geometry import LineString
 from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import MultiPolygon
 
 from src.ego_state import EgoState
 from src.sensor_suite import SensorSuite
 
+
+
+def plot_shapely_geometry(ax, geom, facecolor, edgecolor, alpha=0.22, zorder=70):
+    """Utility to render Shapely Polygons or MultiPolygons onto Matplotlib axes."""
+    if geom is None or geom.is_empty:
+        return
+
+    geoms = geom.geoms if isinstance(geom, MultiPolygon) else [geom]
+    for g in geoms:
+        if g.geom_type == 'Polygon' and not g.is_empty:
+            exterior_coords = np.array(g.exterior.coords)
+            ax.add_patch(patches.Polygon(
+                exterior_coords, closed=True,
+                facecolor=facecolor, edgecolor=edgecolor,
+                alpha=alpha, linewidth=1.0, zorder=zorder
+            ))
 
 def create_wedge_polygon(center, r, theta1_deg, theta2_deg, num_points=30):
     """
@@ -140,49 +157,56 @@ def render_frame(
 
 
     # 2. Render Radar and USS FOV Cone
-    front_t1, front_t2 = heading_deg - (front_radar.fov_deg / 2.0), heading_deg + (front_radar.fov_deg / 2.0)
-    front_fov_wedge = patches.Wedge(
-        center=front_pos,
-        r=front_radar.range_max,
-        theta1=front_t1,
-        theta2=front_t2,
-        facecolor="#00E5FF",
-        alpha=0.22,
-        edgecolor="#0099CC",
-        linestyle="-",
-        linewidth=1.0,
-        zorder=70
-    )
-    ax.add_patch(front_fov_wedge)
-    sensor_polygons.append((
-        create_wedge_polygon(front_pos, front_radar.range_max, front_t1, front_t2),
-        "#00E5FF", # Highlight color for front radar
-        front_tracked_ids,
-        front_pos
-    ))
+   # front_t1, front_t2 = heading_deg - (front_radar.fov_deg / 2.0), heading_deg + (front_radar.fov_deg / 2.0)
+   # front_fov_wedge = patches.Wedge(
+   #     center=front_pos,
+   #     r=front_radar.range_max,
+   #     theta1=front_t1,
+   #     theta2=front_t2,
+   #     facecolor="#00E5FF",
+   #     alpha=0.22,
+   #     edgecolor="#0099CC",
+   #     linestyle="-",
+   #     linewidth=1.0,
+   #     zorder=70
+   # )
+   # ax.add_patch(front_fov_wedge)
+   # sensor_polygons.append((
+   #     create_wedge_polygon(front_pos, front_radar.range_max, front_t1, front_t2),
+   #     "#00E5FF", # Highlight color for front radar
+   #     front_tracked_ids,
+   #     front_pos
+   # ))
+
+   # if rear_radar is not None:
+   #     rear_t1 = heading_deg + 180.0 - (rear_radar.fov_deg / 2.0)
+   #     rear_t2 = heading_deg + 180.0 + (rear_radar.fov_deg / 2.0)
+   #     rear_fov_wedge = patches.Wedge(
+   #             center=rear_pos,
+   #             r=rear_radar.range_max,
+   #             theta1=rear_t1,
+   #             theta2=rear_t2,
+   #             facecolor="#AB47BC",
+   #             alpha=0.22,
+   #             edgecolor="#7B1FA2",
+   #             linestyle="-",
+   #             linewidth=1.0,
+   #             zorder=70
+   #     )
+   #     ax.add_patch(rear_fov_wedge)
+   #     sensor_polygons.append((
+   #         create_wedge_polygon(rear_pos, rear_radar.range_max, rear_t1, rear_t2), 
+   #         "#E040FB",  # Highlight color for rear radar
+   #         rear_tracked_ids,
+   #         rear_pos
+   #     ))
+    if front_radar is not None:
+         front_scan = front_radar.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+         plot_shapely_geometry(ax, front_scan.get("visible_fov"), facecolor="#00E5FF", edgecolor="#0099CC", alpha=0.22, zorder=70)
 
     if rear_radar is not None:
-        rear_t1 = heading_deg + 180.0 - (rear_radar.fov_deg / 2.0)
-        rear_t2 = heading_deg + 180.0 + (rear_radar.fov_deg / 2.0)
-        rear_fov_wedge = patches.Wedge(
-                center=rear_pos,
-                r=rear_radar.range_max,
-                theta1=rear_t1,
-                theta2=rear_t2,
-                facecolor="#AB47BC",
-                alpha=0.22,
-                edgecolor="#7B1FA2",
-                linestyle="-",
-                linewidth=1.0,
-                zorder=70
-        )
-        ax.add_patch(rear_fov_wedge)
-        sensor_polygons.append((
-            create_wedge_polygon(rear_pos, rear_radar.range_max, rear_t1, rear_t2), 
-            "#E040FB",  # Highlight color for rear radar
-            rear_tracked_ids,
-            rear_pos
-        ))
+        rear_scan = rear_radar.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+        plot_shapely_geometry(ax, rear_scan.get("visible_fov"), facecolor="#AB47BC", edgecolor="#7B1FA2", alpha=0.22, zorder=70)
 
 
     if uss_left is not None:
@@ -296,6 +320,7 @@ def render_frame(
         zorder=85
     )
     # 4. Render Surrounding Vehicles
+    active_radars = [(front_radar, "#00E5FF"), (rear_radar, "#E040FB")]
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
         obs_color = "#E67E22" if is_hit else "#1F77B4"
@@ -306,7 +331,7 @@ def render_frame(
                 pos = obs_state.position
                 ax.plot(pos[0], pos[1], marker="X", markersize=10, color="red", zorder=105)
 
-        obs_poly_shapely = ShapelyPolygon(corners)
+        #obs_poly_shapely = ShapelyPolygon(corners)
         ax.add_patch(patches.Polygon(
             corners, closed=True, 
             facecolor=obs_color, edgecolor="black", 
@@ -347,54 +372,68 @@ def render_frame(
                         )
                 break
 
+        for radar, highlight_color in active_radars:
+            if radar is None:
+                continue
+            scan_data = radar.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+            occ_data = scan_data["fov_data"].get(obs_id)
+
+            if occ_data and occ_data.in_fov:
+                for seg_coords in occ_data.visible_segments:
+                    ax.plot(
+                            seg_coords[:, 0], seg_coords[:, 1],
+                            color=highlight_color, linewidth=3.0,
+                            solid_capstyle='round', zorder=105
+                            )
+
                     
-
-        for wedge_poly, highlight_color, tracked_ids, sensor_origin in sensor_polygons:
-            if obs_id in tracked_ids and obs_poly_shapely.intersects(wedge_poly):
-                
-                # Extract counter-clockwise outer boundary points
-                pts = np.array(obs_poly_shapely.exterior.coords)[:-1]
-                num_pts = len(pts)
-                visible_segments = []
-
-                # Find segments whose outward normal points towards the sensor origin
-                for i in range(num_pts):
-                    p1 = pts[i]
-                    p2 = pts[(i + 1) % num_pts]
-                    edge = p2 - p1
-                    
-                    # Outward normal vector for CCW polygon: (dy, -dx)
-                    normal = np.array([edge[1], -edge[0]])
-                    vec_to_sensor = sensor_origin - p1
-
-                    # Edge faces sensor if dot product is positive
-                    if np.dot(normal, vec_to_sensor) > 0:
-                        visible_segments.append(LineString([p1, p2]))
-
-                # Intersect visible segments with sensor wedge
-                for seg in visible_segments:
-                    if seg.intersects(wedge_poly):
-                        intersected = seg.intersection(wedge_poly)
-                        if intersected.is_empty:
-                            continue
-
-                        lines = (
-                            intersected.geoms 
-                            if hasattr(intersected, 'geoms') 
-                            else [intersected]
-                        )
-
-                        for line in lines:
-                            if line.geom_type in ['LineString', 'LinearRing']:
-                                line_coords = np.array(line.coords)
-                                ax.plot(
-                                    line_coords[:, 0], line_coords[:, 1],
-                                    color=highlight_color,
-                                    linewidth=3.0,
-                                    solid_capstyle='round',
-                                    zorder=105
-                                )
-
+#
+#        for wedge_poly, highlight_color, tracked_ids, sensor_origin in sensor_polygons:
+#            if obs_id in tracked_ids and obs_poly_shapely.intersects(wedge_poly):
+#                
+#                # Extract counter-clockwise outer boundary points
+#                pts = np.array(obs_poly_shapely.exterior.coords)[:-1]
+#                num_pts = len(pts)
+#                visible_segments = []
+#
+#                # Find segments whose outward normal points towards the sensor origin
+#                for i in range(num_pts):
+#                    p1 = pts[i]
+#                    p2 = pts[(i + 1) % num_pts]
+#                    edge = p2 - p1
+#                    
+#                    # Outward normal vector for CCW polygon: (dy, -dx)
+#                    normal = np.array([edge[1], -edge[0]])
+#                    vec_to_sensor = sensor_origin - p1
+#
+#                    # Edge faces sensor if dot product is positive
+#                    if np.dot(normal, vec_to_sensor) > 0:
+#                        visible_segments.append(LineString([p1, p2]))
+#
+#                # Intersect visible segments with sensor wedge
+#                for seg in visible_segments:
+#                    if seg.intersects(wedge_poly):
+#                        intersected = seg.intersection(wedge_poly)
+#                        if intersected.is_empty:
+#                            continue
+#
+#                        lines = (
+#                            intersected.geoms 
+#                            if hasattr(intersected, 'geoms') 
+#                            else [intersected]
+#                        )
+#
+#                        for line in lines:
+#                            if line.geom_type in ['LineString', 'LinearRing']:
+#                                line_coords = np.array(line.coords)
+#                                ax.plot(
+#                                    line_coords[:, 0], line_coords[:, 1],
+#                                    color=highlight_color,
+#                                    linewidth=3.0,
+#                                    solid_capstyle='round',
+#                                    zorder=105
+#                                )
+#
 
    # 5. Render Ego Vehicle
     
