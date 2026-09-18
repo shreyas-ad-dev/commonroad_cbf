@@ -75,19 +75,39 @@ def get_gif_frame(gif_path: str, frame_index: int) -> Image.Image:
 # -----------------------------------------------------------------------------
 # Sidebar Configuration
 # -----------------------------------------------------------------------------
+#st.sidebar.header("📁 File & Settings Config")
+
+#default_jsonl = "log_zam32.jsonl"
+#default_frames_dir = "frames_zam32"
+#default_gif = "zam_zip32_v2_merge.gif"
+
+#jsonl_file = st.sidebar.text_input("JSONL Path:", value=default_jsonl)
+#frames_dir = st.sidebar.text_input("Frames Directory:", value=default_frames_dir)
+#gif_file = st.sidebar.text_input("GIF Path (Optional):", value=default_gif)
+
+#if not Path(jsonl_file).exists():
+#    st.error(f"Cannot find log file: {jsonl_file}. Please check the path.")
+#    st.stop()
+# Scan root directory for files
+root_dir = Path(".")
+json_files = sorted([p.name for p in root_dir.glob("*.json*")])
+gif_files = sorted([p.name for p in root_dir.glob("*.gif")])
+
 st.sidebar.header("📁 File & Settings Config")
 
-default_jsonl = "log_zam32.jsonl"
-default_frames_dir = "frames_zam32"
-default_gif = "zam_zip32_v2_merge.gif"
+# JSON / JSONL Dropdown
+if json_files:
+    default_json_idx = json_files.index("log_zam32.jsonl") if "log_zam32.jsonl" in json_files else 0
+    jsonl_file = st.sidebar.selectbox("Select JSON/JSONL Log:", options=json_files, index=default_json_idx)
+else:
+    jsonl_file = st.sidebar.text_input("JSONL Path:", value="log_zam32.jsonl")
 
-jsonl_file = st.sidebar.text_input("JSONL Path:", value=default_jsonl)
-frames_dir = st.sidebar.text_input("Frames Directory:", value=default_frames_dir)
-gif_file = st.sidebar.text_input("GIF Path (Optional):", value=default_gif)
-
-if not Path(jsonl_file).exists():
-    st.error(f"Cannot find log file: {jsonl_file}. Please check the path.")
-    st.stop()
+# GIF Dropdown
+if gif_files:
+    default_gif_idx = gif_files.index("zam_zip32_v2_merge.gif") if "zam_zip32_v2_merge.gif" in gif_files else 0
+    gif_file = st.sidebar.selectbox("Select GIF File:", options=gif_files, index=default_gif_idx)
+else:
+    gif_file = st.sidebar.text_input("GIF Path:", value="zam_zip32_v2_merge.gif")
 
 df = load_jsonl_log(jsonl_file)
 total_steps = len(df)
@@ -191,18 +211,18 @@ view_col1, view_col2 = st.columns([1, 1])
 
 with view_col1:
     st.subheader("🖼️ Frame Visualization")
-    
-    # Option 1: Try individual PNG file in directory first
-    frame_image_path = Path(frames_dir) / f"frame_{current_step:02d}.png"
-    if not frame_image_path.exists():
-        # Try without zero-padding naming standard
-        frame_image_path = Path(frames_dir) / f"frame_{current_step}.png"
-    
-    if frame_image_path.exists():
-        st.image(str(frame_image_path), caption=f"Frame File: {frame_image_path.name}", use_container_width=True)
-    
+#    
+#    # Option 1: Try individual PNG file in directory first
+#    frame_image_path = Path(frames_dir) / f"frame_{current_step:02d}.png"
+#    if not frame_image_path.exists():
+#        # Try without zero-padding naming standard
+#        frame_image_path = Path(frames_dir) / f"frame_{current_step}.png"
+#    
+#    if frame_image_path.exists():
+#        st.image(str(frame_image_path), caption=f"Frame File: {frame_image_path.name}", use_container_width=True)
+#    
     # Option 2: Extract frame directly from animated GIF by frame index
-    elif Path(gif_file).exists():
+    if Path(gif_file).exists():
         extracted_frame = get_gif_frame(gif_file, current_step)
         st.image(extracted_frame, caption=f"GIF Frame Index: {current_step}", use_container_width=True)
     else:
