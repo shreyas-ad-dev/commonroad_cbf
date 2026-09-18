@@ -1,6 +1,16 @@
+from dataclasses import dataclass
 import numpy as np
 
 from src.ego_state import EgoState, get_car_polygon
+
+@dataclass
+class SensorOcclusionData:
+    obstacle_id: int
+    in_fov: bool
+    min_dist: float
+    center_x_local: float
+    center_y_local: float
+    visible_segments: [np.ndarray]
 
 
 class BaseSensor:

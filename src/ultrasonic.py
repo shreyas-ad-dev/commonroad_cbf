@@ -6,18 +6,10 @@ from shapely.geometry import LineString
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
-from src.base_sensor import BaseSensor
+from src.base_sensor import BaseSensor, SensorOcclusionData
 from src.ego_state import EgoState, get_car_polygon
 from src.tracker import Detection
 
-@dataclass
-class SensorOcclusionData:
-    obstacle_id: int
-    in_fov: bool
-    min_dist: float
-    center_x_local: float
-    center_y_local: float
-    visible_segments: [np.ndarray]
 
 class SideUltrasonicSensor(BaseSensor):
     """
