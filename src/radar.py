@@ -390,13 +390,13 @@ class RadarSensor(BaseSensor):
             if long_road > 0.0:  # Vehicle must be ahead along the road
                 in_corridor = abs(lat_road - target_offset) <= half_corridor
 
-                if in_corridor and (min_dist < closest_dist):
-                    closest_dist = min_dist
+                if in_corridor and (occ_data.min_dist < closest_dist):
+                    closest_dist = occ_data.min_dist
                     target_v = float(getattr(st, 'velocity', 15.0))
                     # Calculate bumper-to-bumper longitudinal distance offset
                     obs_length = getattr(obs.obstacle_shape, 'length', 4.5)
                     ego_length = ego.length
-                    bumper_x_local = max(0.1, center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
+                    bumper_x_local = max(0.1, occ_data.center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
 
                     lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, bumper_x_local)
         return lead_target
@@ -443,7 +443,7 @@ class RadarSensor(BaseSensor):
             rear_occ = rear_scan["fov_data"].get(obs_id) if rear_scan else None
 
             in_front_fov = front_occ.in_fov if front_occ else False
-            in_read_fov = rear_occ.in_fov if rear_occ else False
+            in_rear_fov = rear_occ.in_fov if rear_occ else False
 
             if not (in_front_fov or in_rear_fov):
                 continue
