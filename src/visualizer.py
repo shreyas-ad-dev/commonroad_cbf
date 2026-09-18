@@ -122,11 +122,6 @@ def render_frame(
     uss_left = sensor_suite.uss_left
     uss_right = sensor_suite.uss_right
 
-    front_tracked_ids = sensor_suite.front_tracked_ids
-    rear_tracked_ids = sensor_suite.rear_tracked_ids
-    left_tracked_ids = sensor_suite.left_tracked_ids
-    right_tracked_ids = sensor_suite.right_tracked_ids
-
     lead_target = sensor_suite.latest_perception.lead_target
     #lead_target_id = lead_target[3] if lead_target is not None else None
     lead_target_id = lead_target.associated_obstacle_id if lead_target is not None else None
@@ -149,9 +144,9 @@ def render_frame(
         draw_obstacle_trajectories(ax, [obs for obs, _, _ in surrounding_states], zorder=50)
 
     front_pos = ego.position + (ego.length / 2.0) * ego.heading_vector
-    rear_pos = ego.position - (ego.length / 2.0) * ego. heading_vector
-    heading_deg = np.degrees(ego.orientation)
-    sensor_polygons = []
+    #rear_pos = ego.position - (ego.length / 2.0) * ego. heading_vector
+    #heading_deg = np.degrees(ego.orientation)
+    #sensor_polygons = []
 
 
     # 2. Render Radar and USS FOV Cone
