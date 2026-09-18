@@ -208,51 +208,59 @@ def render_frame(
         rear_scan = rear_radar.scan(ego, [obs for obs, _, _ in surrounding_states], step)
         plot_shapely_geometry(ax, rear_scan.get("visible_fov"), facecolor="#AB47BC", edgecolor="#7B1FA2", alpha=0.22, zorder=70)
 
-
     if uss_left is not None:
-        # Left USS (+90 deg)
-        left_t1, left_t2 = heading_deg + 90.0 - (uss_left.fov_deg / 2.0), heading_deg + 90.0 + (uss_left.fov_deg / 2.0)
-        left_wedge = patches.Wedge(
-                center=ego.position,
-                r=uss_left.range_max,
-                theta1=left_t1,
-                theta2=left_t2,
-                facecolor="#FFE082",
-                alpha=0.60,
-                edgecolor="#FFA000",
-                linestyle="--",
-                zorder=70
-        )
-        ax.add_patch(left_wedge)
-        sensor_polygons.append((
-            create_wedge_polygon(ego.position, uss_left.range_max, left_t1, left_t2), 
-            "#FFB300",  # Highlight color for side USS
-            left_tracked_ids,
-            ego.position
-        ))
+        left_scan = uss_left.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+        plot_shapely_geometry(ax, left_scan.get("visible_fov"), facecolor="#FFE082", edgecolor="#FFA000", alpha=0.40, zorder=70)
 
-            
-        if uss_right is not None:
-            # Right USS (-90 deg)
-            right_t1, right_t2 = heading_deg - 90.0 - (uss_right.fov_deg / 2.0), heading_deg - 90.0 + (uss_right.fov_deg / 2.0)
-            right_wedge = patches.Wedge(
-                    center=ego.position,
-                    r=uss_right.range_max,
-                    theta1=right_t1,
-                    theta2=right_t2,
-                    facecolor="#FFE082",
-                    alpha=0.60,
-                    edgecolor="#FFA000",
-                    linestyle="--",
-                    zorder=70
-                )
-            ax.add_patch(right_wedge)
-            sensor_polygons.append((
-                create_wedge_polygon(ego.position, uss_right.range_max, right_t1, right_t2), 
-                "#FFB300", # Highlight color for side USS
-                right_tracked_ids,
-                ego.position
-            ))
+    if uss_right is not None:
+        right_scan = uss_right.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+        plot_shapely_geometry(ax, right_scan.get("visible_fov"), facecolor="#FFE082", edgecolor="#FFA000", alpha=0.40, zorder=70)
+
+#
+#    if uss_left is not None:
+#        # Left USS (+90 deg)
+#        left_t1, left_t2 = heading_deg + 90.0 - (uss_left.fov_deg / 2.0), heading_deg + 90.0 + (uss_left.fov_deg / 2.0)
+#        left_wedge = patches.Wedge(
+#                center=ego.position,
+#                r=uss_left.range_max,
+#                theta1=left_t1,
+#                theta2=left_t2,
+#                facecolor="#FFE082",
+#                alpha=0.60,
+#                edgecolor="#FFA000",
+#                linestyle="--",
+#                zorder=70
+#        )
+#        ax.add_patch(left_wedge)
+#        sensor_polygons.append((
+#            create_wedge_polygon(ego.position, uss_left.range_max, left_t1, left_t2), 
+#            "#FFB300",  # Highlight color for side USS
+#            left_tracked_ids,
+#            ego.position
+#        ))
+#
+#            
+#        if uss_right is not None:
+#            # Right USS (-90 deg)
+#            right_t1, right_t2 = heading_deg - 90.0 - (uss_right.fov_deg / 2.0), heading_deg - 90.0 + (uss_right.fov_deg / 2.0)
+#            right_wedge = patches.Wedge(
+#                    center=ego.position,
+#                    r=uss_right.range_max,
+#                    theta1=right_t1,
+#                    theta2=right_t2,
+#                    facecolor="#FFE082",
+#                    alpha=0.60,
+#                    edgecolor="#FFA000",
+#                    linestyle="--",
+#                    zorder=70
+#                )
+#            ax.add_patch(right_wedge)
+#            sensor_polygons.append((
+#                create_wedge_polygon(ego.position, uss_right.range_max, right_t1, right_t2), 
+#                "#FFB300", # Highlight color for side USS
+#                right_tracked_ids,
+#                ego.position
+#            ))
 
 
     # 3. Render CBF Safety Buffer Zone
@@ -320,7 +328,11 @@ def render_frame(
         zorder=85
     )
     # 4. Render Surrounding Vehicles
-    active_radars = [(front_radar, "#00E5FF"), (rear_radar, "#E040FB")]
+    active_sensors = [
+            (front_radar, "#00E5FF"),
+            (rear_radar, "#E040FB"),
+            (uss_left, "#FFB300"),
+            (uss_right,"#FFB300")]
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
         obs_color = "#E67E22" if is_hit else "#1F77B4"
@@ -372,10 +384,10 @@ def render_frame(
                         )
                 break
 
-        for radar, highlight_color in active_radars:
-            if radar is None:
+        for sensor, highlight_color in active_sensors:
+            if sensor is None:
                 continue
-            scan_data = radar.scan(ego, [obs for obs, _, _ in surrounding_states], step)
+            scan_data = sensor.scan(ego, [obs for obs, _, _ in surrounding_states], step)
             occ_data = scan_data["fov_data"].get(obs_id)
 
             if occ_data and occ_data.in_fov:
