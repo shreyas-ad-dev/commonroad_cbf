@@ -215,15 +215,7 @@ class SensorSuite:
         confirmed_tracks = self.tracker.process_step(raw_detections)
 
         # 5. Cache Lead Target
-       # lead_target = self.front_radar.track_lead_vehicle(
-       #     ego=ego,
-       #     obstacles=nearby_obstacles,
-       #     step=step,
-       #     target_offset=target_offset
-       # )
-
         self.latest_perception = PerceptionState(
-            #lead_target=lead_target,
             radar_scans=radar_results,
             uss_scans=uss_results,
             filtered_obstacles=nearby_obstacles,
@@ -240,38 +232,6 @@ class SensorSuite:
             target_offset=target_offset
         )
         return self.latest_perception.lead_target
-
-  #  def is_lane_change_safe(
-  #      self,
-  #      ego: EgoState,
-  #      target_offset: float,
-  #      step: int,
-  #      safety_gap_front: float = 10.0,
-  #      safety_gap_rear: float = 8.0
-  #  ) -> LaneClearanceResult:
-  #      obstacles = self.latest_perception.filtered_obstacles or []
-
-  #      radar_clear = self.front_radar.is_adjacent_lane_clear(
-  #          ego=ego,
-  #          surrounding_obstacles=obstacles,
-  #          step=step,
-  #          target_lane_offset=target_offset,
-  #          safety_gap_front=safety_gap_front,
-  #          safety_gap_rear=safety_gap_rear,
-  #          rear_radar=self.rear_radar
-  #      )
-
-  #      active_uss = self.uss_left if target_offset > 0 else self.uss_right
-  #      uss_clear = (
-  #          active_uss.is_adjacent_lane_clear(ego, obstacles, step, target_offset)
-  #          if active_uss is not None else True
-  #      )
-
-  #      return LaneClearanceResult(
-  #          is_safe=radar_clear and uss_clear,
-  #          radar_clear=radar_clear,
-  #          uss_clear=uss_clear
-  #      )
 
     def is_lane_change_safe_from_tracks(
         self,
