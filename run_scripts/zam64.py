@@ -30,7 +30,7 @@ NUM_STEPS = 100
 DESIRED_SPEED = 15.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_zam"
-JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
+JSON_PATH = PROJECT_ROOT / "log_zam64.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------

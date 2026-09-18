@@ -28,7 +28,7 @@ NUM_STEPS = 100
 DESIRED_SPEED = 12.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_wolfsburg"
-JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
+JSON_PATH = PROJECT_ROOT / "log_wolfsburg.jsonl"
 setup_frames_directory(FRAMES_DIR)
 # -----------------------------------------------------------------------------
 # 1. Load Scenario

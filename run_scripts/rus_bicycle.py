@@ -29,7 +29,7 @@ NUM_STEPS = 50
 DESIRED_SPEED = 5.0  # m/s
 
 FRAMES_DIR = PROJECT_ROOT / "frames_bicycle"
-JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
+JSON_PATH = PROJECT_ROOT / "log_rus_bicycle.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------

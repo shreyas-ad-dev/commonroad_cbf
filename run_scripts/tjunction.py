@@ -28,7 +28,7 @@ NUM_STEPS = 100
 DESIRED_SPEED = 8.0  # Lower speed for junction approach
 
 FRAMES_DIR = PROJECT_ROOT / "frames_tjunction"
-JSON_PATH = PROJECT_ROOT / "log_zam32.jsonl"
+JSON_PATH = PROJECT_ROOT / "log_tjunction.jsonl"
 setup_frames_directory(FRAMES_DIR)
 
 # -----------------------------------------------------------------------------
