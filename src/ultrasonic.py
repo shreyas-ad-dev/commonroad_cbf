@@ -105,41 +105,6 @@ class SideUltrasonicSensor(BaseSensor):
         p2_proj = p2 + v2 * proj_factor
 
         return ShapelyPolygon([p1, p2, p2_proj, p1_proj])
-    
-  #  def is_in_fov(self,
-  #                ego: EgoState,
-  #                obstacle: object,
-  #                step: int) -> tuple[bool, float, float, float]:
-  #      """
-  #      Evaluates whether an obstacle's center or bounding box corners fall within the sensor FOV cone.
-
-  #      Returns:
-  #          tuple[bool, float, float, float]: (in_fov, min_dist, center_x_local, center_y_local)
-  #      """
-  #      eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
-  #      if eval_data is None:
-  #          return False, float('inf'), 0.0, 0.0
-
-  #      center_local, local_points = eval_data
-  #      center_x_local, center_y_local = center_local[0], center_local[1]
-
-  #      min_dist = float('inf')
-  #      any_corner_in_fov = False
-
-  #      for pt in local_points:
-  #          x_local, y_local = pt[0], pt[1]
-  #          dist = float(np.hypot(x_local, y_local))
-
-  #          min_dist = min(min_dist, dist)
-
-  #          is_side_aligned = (self.side == "left" and y_local > 0.0) or (self.side == "right" and y_local < 0.0)
-  #          if dist <= self.range_max and is_side_aligned:
-  #              sensor_y = y_local if self.side == "left" else -y_local
-  #              angle = np.arctan2(x_local, sensor_y)
-  #              if abs(angle) <= self.half_fov_rad:
-  #                  any_corner_in_fov = True
-
-  #      return any_corner_in_fov, min_dist, center_x_local, center_y_local
 
     def scan(self,
              ego: EgoState,
@@ -174,10 +139,6 @@ class SideUltrasonicSensor(BaseSensor):
 
             valid_obstacles = []
             for obs in obstacles:
-                #in_fov, min_dist, center_x_local, center_y_local= self.is_in_fov(ego, obs, step)
-                #if in_fov:
-                    #detected_ids.add(obs.obstacle_id)
-                    #min_distances[obs.obstacle_id] = min_dist
                 eval_data = self.get_obstacle_center_and_corners_in_local(ego, obs, step)
                 st = obs.state_at_time(step)
                 if eval_data is None or st is None:
