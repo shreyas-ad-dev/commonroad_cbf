@@ -345,13 +345,13 @@ def render_frame(
         for track in sensor_suite.tracked_objects:
             if np.linalg.norm(track.position - obs_center) < 3.0:
                 ax.text(
-                    obs_center[0], obs_center[1] + 2.0,
-                    f"TRK #{track.track_id}",
-                    color="white",
+                    obs_center[0], obs_center[1],
+                    f"#{track.track_id}",
+                    color="black",
                     fontsize=8,
                     fontweight="bold",
                     ha="center",
-                    bbox={'boxstyle' :"round,pad=0.15", 'facecolor' :"#111111", 'alpha' :0.8},
+                    va="center",
                     zorder=120
                 )
                 if hazard_track is not None and np.linalg.norm(hazard_track.position - obs_center) < 3.0:
