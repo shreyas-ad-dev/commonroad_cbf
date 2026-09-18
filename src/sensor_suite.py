@@ -304,3 +304,9 @@ class SensorSuite:
             radar_clear=lane_clear,
             uss_clear=lane_clear
         )
+
+    def get_log_data(self) -> dict:
+        return{
+                "active_tracks":[track.serialize() for track in self.tracker.active_tracks],
+                "confirmed_tracks": [track.serialize() for track in self.tracker.confirmed_tracks],
+            }
