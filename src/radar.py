@@ -264,8 +264,8 @@ class RadarSensor(BaseSensor):
 
                     if np.dot(normal, sensor_pos - p1) > 0:
                         seg = LineString([p1, p2])
-                        if seg.intersects(fov_wedge):
-                            intersection = seg.intersection(fov_wedge)
+                        if seg.intersects(effective_fov):
+                            intersection = seg.intersection(effective_fov)
                             if not intersection.is_empty:
                                 geoms = intersection.geoms if hasattr(intersection, 'geoms') else [intersection]
                                 for g in geoms:
