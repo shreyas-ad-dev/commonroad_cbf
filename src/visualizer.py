@@ -4,13 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from commonroad.visualization.mp_renderer import MPRenderer
 from matplotlib import patches
-from shapely.geometry import LineString
-from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.geometry import MultiPolygon
+from shapely.geometry import Polygon as ShapelyPolygon
 
 from src.ego_state import EgoState
 from src.sensor_suite import SensorSuite
-
 
 
 def plot_shapely_geometry(ax, geom, facecolor, edgecolor, alpha=0.22, zorder=70):

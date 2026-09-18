@@ -1,7 +1,9 @@
 from dataclasses import dataclass
+
 import numpy as np
 
 from src.ego_state import EgoState, get_car_polygon
+
 
 @dataclass
 class SensorOcclusionData:

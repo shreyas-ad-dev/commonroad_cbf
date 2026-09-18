@@ -1,13 +1,12 @@
 from typing import Any
 
-from dataclasses import dataclass
 import numpy as np
 from shapely.geometry import LineString
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from src.base_sensor import BaseSensor, SensorOcclusionData
-from src.ego_state import EgoState, get_car_polygon 
+from src.ego_state import EgoState, get_car_polygon
 from src.tracker import Detection
 
 
