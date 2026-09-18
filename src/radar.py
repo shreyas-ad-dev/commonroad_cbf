@@ -1,10 +1,23 @@
 from typing import Any
 
+from dataclasses import dataclass
 import numpy as np
+from shapely.geometry import LineString
+from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.ops import unary_union
 
 from src.base_sensor import BaseSensor
-from src.ego_state import EgoState
+from src.ego_state import EgoState, get_car_polygon 
 from src.tracker import Detection
+
+@dataclass
+class SensorOcclusionData:
+    obstacle_id: int
+    in_fov: bool
+    min_dist: float
+    center_x_local: float
+    center_y_local: float
+    visible_segments: [np.ndarray]
 
 
 class RadarSensor(BaseSensor):
@@ -24,7 +37,8 @@ class RadarSensor(BaseSensor):
                  range_max: float = 70.0,
                  fov_deg: float = 60.0,
                  mount_position: str = "front",
-                 noise_std: float = 0.5):
+                 noise_std: float = 0.5,
+                 ray_count: int = 40):
         """
         Initializes the RadarSensor instance.
 
@@ -46,6 +60,7 @@ class RadarSensor(BaseSensor):
         self.sensor_id  = f"radar_{mount_position}"
         self.noise_std = noise_std
         self.R = np.eye(2) * (noise_std **2)
+        self.ray_count = ray_count
 
         # Stateful internal cache
         self._last_step: int | None = None
@@ -53,58 +68,105 @@ class RadarSensor(BaseSensor):
             "detected_ids": set(),
             "fov_data": {},  # Maps obs_id -> (in_fov, min_dist, center_x_local, center_y_local)
             "detections": [],
-            "lead_target": None
+            "lead_target": None,
+            "visible_fov": None
         }
 
-    def is_in_fov(self,
-                  ego: EgoState,
-                  obstacle: object,
-                  step: int) -> tuple[bool, float, float, float]:
-        """
-        Checks if an obstacle's center or any of its bounding box corners fall within the Radar's FOV.
+    def _get_sensor_transform(self, ego: EgoState) -> (np.ndarray, float):
+        if self.mount_position == "front":
+            offset = (ego.length / 2.0)
+            sensor_heading_deg = np.degrees(ego.orientation)
+        else:
+            offset = -(ego.length / 2.0)
+            sensor_heading_deg = np.degrees(ego.orientation) + 180.0
 
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacle (object): Dynamic obstacle instance to evaluate.
-            step (int): Current simulation time step index.
+        sensor_pos = ego.position + offset*ego.heading_vector
+        
+        return sensor_pos, sensor_heading_deg
+    
+    def _build_fov_wedge(self, sensor_pos: np.ndarray, sensor_heading_deg: float) -> ShapelyPolygon:
+        t1 = sensor_heading_deg - (self.fov_deg / 2.0)
+        t2 = sensor_heading_deg + (self.fov_deg / 2.0)
+        angles = np.radians(np.linspace(t1, t2, self.ray_count))
 
-        Returns:
-            tuple[bool, float, float, float]: A tuple containing:
-                - any_corner_in_fov (bool): True if any point falls inside detection cone.
-                - min_dist (float): Minimum Euclidean distance across all points.
-                - center_x_local (float): Obstacle center longitudinal offset in Ego frame.
-                - center_y_local (float): Obstacle center lateral offset in Ego frame.
-        """
-        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
-        if eval_data is None:
-            return False, float('inf'), 0.0, 0.0
+        arc_pts = [
+                (sensor_pos[0] + self.range_max * np.cos(a), sensor_pos[1] + self.range_max * np.sin(a)) for a in angles
+                ]
+        return ShapelyPolygon([tuple(sensor_pos)] + arc_pts + [tuple(sensor_pos)])
 
-        center_local, local_points = eval_data
-        center_x_local, center_y_local = center_local[0], center_local[1]
+    def _compute_occlusion_shadow(self, sensor_pos: np.ndarray, obs_poly: ShapelyPolygon) -> ShapelyPolygon | None:
+        pts = np.array(obs_poly.exterior.coords)[:-1]
+        if len(pts) == 0:
+            return None
 
-        min_dist = float('inf')
-        any_corner_in_fov = False
+        angles = [np.arctan2(p[1] - sensor_pos[1], p[0] - sensor_pos[0]) for p in pts]
+        min_idx, max_idx = np.argmin(angles), np.argmax(angles)
 
-        for pt in local_points:
-            x_local, y_local = pt[0], pt[1]
-            dist = float(np.hypot(x_local, y_local))
+        if angles[max_idx] - angles[min_idx] > np.pi:
+            pos_angles = [a if a >= 0 else a + 2* np.pi for a in angles]
+            min_idx, max_idx = np.argmin(pos_angles), np.argmax(pos_angles)
 
-            min_dist = min(min_dist, dist)
+        p1, p2 = pts[min_idx], pts[max_idx]
 
-            if dist <= self.range_max:
-                # Direction constraint based on mounting orientation
-                is_valid_direction = (
-                    (self.mount_position == "front" and x_local > 0.0) or
-                    (self.mount_position == "rear" and x_local < 0.0)
-                )
+        proj_factor = self.range_max * 2.0
+        v1 = (p1 - sensor_pos) / np.linalg.norm(p1 - sensor_pos)
+        v2 = (p2 - sensor_pos) / np.linalg.norm(p2 - sensor_pos)
 
-                if is_valid_direction:
-                    sensor_x = x_local if self.mount_position == "front" else -x_local
-                    angle = np.arctan2(y_local, sensor_x)
-                    if abs(angle) <= self.half_fov_rad:
-                        any_corner_in_fov = True
+        p1_proj = p1 + v1 * proj_factor
+        p2_proj = p2 + v2 * proj_factor
 
-        return any_corner_in_fov, min_dist, center_x_local, center_y_local
+        return ShapelyPolygon([p1, p2, p2_proj, p1_proj])
+
+
+#    def is_in_fov(self,
+#                  ego: EgoState,
+#                  obstacle: object,
+#                  step: int) -> tuple[bool, float, float, float]:
+#        """
+#        Checks if an obstacle's center or any of its bounding box corners fall within the Radar's FOV.
+#
+#        Args:
+#            ego (EgoState): Current state of the Ego vehicle.
+#            obstacle (object): Dynamic obstacle instance to evaluate.
+#            step (int): Current simulation time step index.
+#
+#        Returns:
+#            tuple[bool, float, float, float]: A tuple containing:
+#                - any_corner_in_fov (bool): True if any point falls inside detection cone.
+#                - min_dist (float): Minimum Euclidean distance across all points.
+#                - center_x_local (float): Obstacle center longitudinal offset in Ego frame.
+#                - center_y_local (float): Obstacle center lateral offset in Ego frame.
+#        """
+#        eval_data = self.get_obstacle_center_and_corners_in_local(ego, obstacle, step)
+#        if eval_data is None:
+#            return False, float('inf'), 0.0, 0.0
+#
+#        center_local, local_points = eval_data
+#        center_x_local, center_y_local = center_local[0], center_local[1]
+#
+#        min_dist = float('inf')
+#        any_corner_in_fov = False
+#
+#        for pt in local_points:
+#            x_local, y_local = pt[0], pt[1]
+#            dist = float(np.hypot(x_local, y_local))
+#
+#            min_dist = min(min_dist, dist)
+#
+#            if dist <= self.range_max:
+#                # Direction constraint based on mounting orientation
+#                is_valid_direction = (
+#                    (self.mount_position == "front" and x_local > 0.0) or
+#                    (self.mount_position == "rear" and x_local < 0.0)
+#                )
+#
+#                if is_valid_direction:
+#                    sensor_x = x_local if self.mount_position == "front" else -x_local
+#                    angle = np.arctan2(y_local, sensor_x)
+#                    if abs(angle) <= self.half_fov_rad:
+#                        any_corner_in_fov = True
+#
+#        return any_corner_in_fov, min_dist, center_x_local, center_y_local
 
     def scan(self,
              ego: EgoState,
@@ -126,43 +188,136 @@ class RadarSensor(BaseSensor):
         if self._last_step != step:
             self._last_step = step
             detected_ids: set[int] = set()
-            fov_data: dict[int, tuple[bool, float, float, float]] = {}
+            #fov_data: dict[int, tuple[bool, float, float, float]] = {}
+            fov_data: {int, SensorOcclusionData} = {}
             detections: list[Detection] = []
-            
+
+            sensor_pos, sensor_heading = self._get_sensor_transform(ego)
+            fov_wedge = self._build_fov_wedge(sensor_pos, sensor_heading)
             timestamp = step * 0.1 # 10 Hz step delta time
 
+            valid_obstacles = []
             for obs in obstacles:
-                in_fov, min_dist, center_x_local, center_y_local = self.is_in_fov(ego, obs, step)
+                #in_fov, min_dist, center_x_local, center_y_local = self.is_in_fov(ego, obs, step)
+                eval_data = self.get_obstacle_center_and_corners_in_local(ego, obs, step)
+                st = obs.state_at_time(step)
+                if eval_data is None or st is None:
+                    continue
 
-                fov_data[obs.obstacle_id] = (in_fov, min_dist, center_x_local, center_y_local)
-                if in_fov:
-                    detected_ids.add(obs.obstacle_id)
+                center_local, local_points = eval_data
+                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', 4.5))
+                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', 4.5))
+                obs_yaw = getattr(st, 'orientation', getattr(st, 'yaw', 0.0))
 
-                    # Apply measurement noise to local center coordinates
-                    noisy_x_local = center_x_local + np.random.normal(0.0, self.noise_std)
-                    noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
-
-                    # Transform noisy measurement back to global coordinates
-                    cos_yaw = np.cos(ego.orientation)
-                    sin_yaw = np.sin(ego.orientation)
-                    global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
-                    global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
-
-                    detections.append(
-                        Detection(
-                            sensor_id=self.sensor_id,
-                            timestamp=timestamp,
-                            z=np.array([global_x, global_y], dtype=np.float64),
-                            obstacle_id=obs.obstacle_id,
-                            R=self.R
+                obs_poly, _ = get_car_polygon(
+                        x=st.position[0],
+                        y=st.position[1],
+                        orientation=obs_yaw,
+                        length=obs_length,
+                        width=obs_width
                         )
+
+                #fov_data[obs.obstacle_id] = (in_fov, min_dist, center_x_local, center_y_local)
+                #in_fov = obs_poly.intersects(fov_wedge)
+                if obs_poly.intersects(fov_wedge):
+                    dist_to_sensor = np.linalg.norm(st.position - sensor_pos)
+                    valid_obstacles.append({
+                        "obs": obs,
+                        "st": st,
+                        "poly": obs_poly,
+                        "dist": dist_to_sensor,
+                        "center_local": center_local,
+                        "local_points": local_points
+                        })
+
+            valid_obstacles.sort(key=lambda item: item["dist"])
+            accumulated_shadows = []
+
+            for item in valid_obstacles:
+                obs = item["obs"]
+                obs_poly = item["poly"]
+                center_local = item["center_local"]
+                local_points = item["local_points"]
+                center_x_local, center_y_local = center_local[0], center_local[1]
+
+                if accumulated_shadows:
+                    combined_shadow = unary_union(accumulated_shadows)
+                    effective_fov = fov_wedge.difference(combined_shadow)
+                else:
+                    effective_fov = fov_wedge
+
+
+                if effective_fov.is_empty or not obs_poly.intersects(effective_fov):
+                    continue
+
+                min_dist = min(float(np.hypot(pt[0], pt[1])) for pt in local_points)
+                detected_ids.add(obs.obstacle_id)
+
+                visible_segments = []
+                pts = np.array(obs_poly.exterior.coords)[:-1]
+                num_pts = len(pts)
+
+                for i in range(num_pts):
+                    p1, p2 = pts[i], pts[(i+1) % num_pts]
+                    edge = p2 - p1
+                    normal = np.array([edge[1], -edge[0]])
+
+                    if np.dot(normal, sensor_pos - p1) > 0:
+                        seg = LineString([p1, p2])
+                        if seg.intersects(fov_wedge):
+                            intersection = seg.intersection(fov_wedge)
+                            if not intersection.is_empty:
+                                geoms = intersection.geoms if hasattr(intersection, 'geoms') else [intersection]
+                                for g in geoms:
+                                    if g.geom_type in ['LineString', 'LinearRing']:
+                                        visible_segments.append(np.array(g.coords))
+
+                fov_data[obs.obstacle_id] = SensorOcclusionData(
+                        obstacle_id=obs.obstacle_id,
+                        in_fov=True,
+                        min_dist=min_dist,
+                        center_x_local=center_x_local,
+                        center_y_local=center_y_local,
+                        visible_segments=visible_segments
+                        )
+
+                # Shadow generation for occlusions
+                shadow_poly = self._compute_occlusion_shadow(sensor_pos, obs_poly)
+                if shadow_poly and shadow_poly.is_valid:
+                    accumulated_shadows.append(shadow_poly)
+
+
+                # Apply measurement noise to local center coordinates
+                noisy_x_local = center_x_local + np.random.normal(0.0, self.noise_std)
+                noisy_y_local = center_y_local + np.random.normal(0.0, self.noise_std)
+
+                # Transform noisy measurement back to global coordinates
+                cos_yaw = np.cos(ego.orientation)
+                sin_yaw = np.sin(ego.orientation)
+                global_x = ego.x + (noisy_x_local * cos_yaw - noisy_y_local * sin_yaw)
+                global_y = ego.y + (noisy_x_local * sin_yaw + noisy_y_local * cos_yaw)
+
+                detections.append(
+                    Detection(
+                        sensor_id=self.sensor_id,
+                        timestamp=timestamp,
+                        z=np.array([global_x, global_y], dtype=np.float64),
+                        obstacle_id=obs.obstacle_id,
+                        R=self.R
                     )
+                )
+
+            visible_fov_geometry = fov_wedge
+            if accumulated_shadows:
+                combined_shadows = unary_union(accumulated_shadows)
+                visible_fov_geometry = fov_wedge.difference(combined_shadows)
 
             self._scan_cache = {
                 "detected_ids": detected_ids,
                 "fov_data": fov_data,
                 "detections": detections,
-                "lead_target": None
+                "lead_target": None,
+                "visible_fov": visible_fov_geometry
             }
 
         return self._scan_cache
@@ -232,8 +387,9 @@ class RadarSensor(BaseSensor):
             if st is None or obs.obstacle_id not in scan_res["fov_data"]:
                 continue
 
-            in_fov, min_dist, center_x_local, _ = scan_res["fov_data"][obs.obstacle_id]
-            if not in_fov:
+            #in_fov, min_dist, center_x_local, _ = scan_res["fov_data"][obs.obstacle_id]
+            occ_data = scan_res["fov_data"][obs.obstacle_id]
+            if not occ_data.in_fov:
                 continue
 
             # Road-aligned corridor projection using center position
@@ -291,8 +447,13 @@ class RadarSensor(BaseSensor):
                 continue
 
             obs_id = obs.obstacle_id
-            in_front_fov = front_scan["fov_data"].get(obs_id, (False,))[0]
-            in_rear_fov = rear_scan["fov_data"].get(obs_id, (False,))[0] if rear_scan else False
+            #in_front_fov = front_scan["fov_data"].get(obs_id, (False,))[0]
+            #in_rear_fov = rear_scan["fov_data"].get(obs_id, (False,))[0] if rear_scan else False
+            front_occ = front_scan["fov_data"].get(obs_id)
+            rear_occ = rear_scan["fov_data"].get(obs_id) if rear_scan else None
+
+            in_front_fov = front_occ.in_fov if front_occ else False
+            in_read_fov = rear_occ.in_fov if rear_occ else False
 
             if not (in_front_fov or in_rear_fov):
                 continue
