@@ -1,11 +1,9 @@
+#src/behavior_planner.py
 
 import numpy as np
 
 from src.ego_state import EgoState
-from src.lateral_controller import (
-    #    extract_target_lanelet_path,
-    generate_lane_change_path,
-)
+from src.lateral_controller import generate_lane_change_path
 from src.map import MapModule
 from src.sensor_suite import SensorSuite
 from src.tracker import Track
@@ -187,22 +185,9 @@ class BehaviorPlanner:
         # Calculate distance to upcoming lane merge point
         dist_to_merge = self.map_module.get_distance_to_next_merge(ego=ego)
 
-        # Trigger early crash checks if merge is within 10 meters
-#        t_lookahead = 1.5
-#        d_min = 5.0
-#        merge_threshold = max(ego.velocity * t_lookahead + d_min, 15.0)
-#        self.is_checking_merge = (dist_to_merge <= merge_threshold)
-
+       
         self.is_checking_merge = (dist_to_merge <= ego.velocity*2.3)
         if self.is_checking_merge:
-            # Preemptively check adjacent lane clearance via SensorSuite
-         #   clearance = sensor_suite.is_lane_change_safe(
-         #           ego=ego, 
-         #           target_offset=self.target_offset, 
-         #           step=step, 
-         #           safety_gap_front=10.0, 
-         #           safety_gap_rear=8.0
-         #           )
             clearance = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
                                          target_offset=self.target_offset,
                                          safety_gap_front=10.0,
@@ -219,10 +204,6 @@ class BehaviorPlanner:
             self.start_x = ego.x
             self.start_y = ego.y
 
-#
-#        if self.mode == "MAP_FOLLOW":
-#            updated_path = self.map_module.extract_target_lanelet_path( ego )
-#            return self.state, updated_path
 
         if self.state == "LANE_CHANGE":
             _, n_road = ego.road_frame_vectors
@@ -244,7 +225,6 @@ class BehaviorPlanner:
         if distance_traveled < self.start_distance:
             return self.state, current_path
 
-        #lane_change_clearance_flags  = sensor_suite.is_lane_change_safe(ego=ego, target_offset=self.target_offset, step=step, safety_gap_front=10.0, safety_gap_rear=8.0)
         lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
                                          target_offset=self.target_offset,
                                          safety_gap_front=10.0,
@@ -280,6 +260,7 @@ class BehaviorPlanner:
                 "lane_change_start_pos": self.lane_change_start_pos,
                 "lead_track": logged_lead_track,
                 "merge_hazard": logged_merge_track,
-                "selected_lead": logged_selected_lead        }
+                "selected_lead": logged_selected_lead        
+                }
 
 
