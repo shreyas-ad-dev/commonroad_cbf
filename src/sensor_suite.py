@@ -1,3 +1,5 @@
+#src/sensor_suite.py
+
 from dataclasses import dataclass, field
 
 import numpy as np

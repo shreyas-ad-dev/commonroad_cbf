@@ -1,3 +1,5 @@
+# src/cbf_solver.py
+
 import numpy as np
 
 try:
