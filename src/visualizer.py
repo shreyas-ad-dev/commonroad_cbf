@@ -213,6 +213,11 @@ def render_frame(
             (rear_radar, "#E040FB"),
             (uss_left, "#FFB300"),
             (uss_right,"#FFB300")]
+    track_state_color = { 
+                         "CONFIRMED" : "#2ECC71",
+                         "TENTATIVE" : "#F39C12",
+                         "DELETED" : "#E74C3C"
+                         }
     for obs, corners, is_hit in surrounding_states:
         obs_id = obs.obstacle_id
         obs_color = "#E67E22" if is_hit else "#1F77B4"
@@ -235,6 +240,7 @@ def render_frame(
 
         for track in sensor_suite.tracked_objects:
             if np.linalg.norm(track.position - obs_center) < 3.0:
+                trk_bg_color = track_state_color[track.state.name]
                 ax.text(
                     obs_center[0], obs_center[1],
                     f"#{track.track_id}",
@@ -243,6 +249,13 @@ def render_frame(
                     fontweight="bold",
                     ha="center",
                     va="center",
+                    bbox={
+                        'boxstyle': "round, pad=0.1",
+                        'facecolor': trk_bg_color,
+                        'edgecolor': "black",
+                        'linewidth': 0.8,
+                        'alpha': 0.85
+                        },
                     zorder=120
                 )
                 if hazard_track is not None and np.linalg.norm(hazard_track.position - obs_center) < 3.0:
