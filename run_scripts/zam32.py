@@ -24,7 +24,7 @@ from src.visualizer import render_frame
 # -----------------------------------------------------------------------------
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Zip-1_32_T-1.xml"
-GIF_NAME = "zam_zip32_v2_merge.gif"
+GIF_NAME = "zam_zip32_merge.gif"
 NUM_STEPS = 100
 DESIRED_SPEED = 15  # High target speed to force late merge conflicts
 
