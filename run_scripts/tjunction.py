@@ -24,7 +24,7 @@ from src.visualizer import render_frame
 SHOW_TRAJECTORIES = False
 XML_FILE = PROJECT_ROOT / "scenarios" / "ZAM_Tjunction-1_212_T-1.xml"
 GIF_NAME = "zam_tjunction_cbf.gif"
-NUM_STEPS = 100
+NUM_STEPS = 50
 DESIRED_SPEED = 8.0  # Lower speed for junction approach
 
 FRAMES_DIR = PROJECT_ROOT / "frames_tjunction"
