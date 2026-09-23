@@ -147,6 +147,9 @@ for step in range(NUM_STEPS):
             has_collided = True
             collision_step = step
             collided_obstacle_id = obs.obstacle_id
+            st = obs.state_at_time(step)
+            st.velocity = 0.0
+            obs.state_at_time = lambda t, s=st: s
             frozen_obs_states[obs.obstacle_id] = (ox, oy, o_orient)
 
         is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
