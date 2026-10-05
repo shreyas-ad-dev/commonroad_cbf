@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 from commonroad.common.file_reader import CommonRoadFileReader
 
+from src.config import SCENARIO, VEHICLE
 
 def load_scenario_and_ego(xml_path: Path):
     """
@@ -55,7 +56,7 @@ def load_scenario_and_ego(xml_path: Path):
     if hasattr(initial_state, 'velocity'):
         v_init = float(initial_state.velocity)
     else:
-        v_init = 15.0
+        v_init = VEHICLE.DEFAULT_VELOCITY 
 
     ego_obstacle = None
     surrounding_obstacles = []
@@ -63,15 +64,15 @@ def load_scenario_and_ego(xml_path: Path):
     # 1. Attempt to match Ego position with an existing scenario obstacle (ZAM style)
     for obs in scenario.obstacles:
         obs_pos = obs.initial_state.position
-        if np.allclose(obs_pos, target_pos, atol=1.5):
+        if np.allclose(obs_pos, target_pos, atol=SCENARIO.OBSTACLE_MATCHING_ATOL):
             ego_obstacle = obs
         else:
             surrounding_obstacles.append(obs)
 
     # 2. Extract vehicle dimensions
     if ego_obstacle is not None:
-        ego_l = float(getattr(ego_obstacle.obstacle_shape, 'length', 4.8))
-        ego_w = float(getattr(ego_obstacle.obstacle_shape, 'width', 2.0))
+        ego_l = float(getattr(ego_obstacle.obstacle_shape, 'length', VEHICLE.DEFAULT_LENGTH))
+        ego_w = float(getattr(ego_obstacle.obstacle_shape, 'width', VEHICLE.DEFAULT_WHEELBASE))
         ego_id = ego_obstacle.obstacle_id
         # Override velocity/orientation from matched obstacle if available
         if hasattr(ego_obstacle.initial_state, 'velocity'):
@@ -80,8 +81,8 @@ def load_scenario_and_ego(xml_path: Path):
             orient = float(ego_obstacle.initial_state.orientation)
     else:
         # Synthetic Ego parameters (USA style)
-        ego_l = 4.8
-        ego_w = 2.0
+        ego_l = VEHICLE.DEFAULT_LENGTH 
+        ego_w = VEHICLE.DEFAULT_WHEELBASE
         ego_id = "Ego_Synthetic"
 
     ego_params = {
