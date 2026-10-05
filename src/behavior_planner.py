@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from src.config import BP, MAP
 from src.ego_state import EgoState
 from src.lateral_controller import generate_lane_change_path
 from src.map import MapModule
@@ -60,7 +61,7 @@ class BehaviorPlanner:
         self._cached_merge_hazard = None
         self._cached_selected_lead = None
 
-    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite, lateral_margin: float = 3.2) -> Track | None:
+    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite, lateral_margin: float = MAP.DEFAULT_LANE_WIDTH_METERS) -> Track | None:
         """Identifies the closest tracked lead vehicle in Ego's current corridor using tracked states."""
         tracks = sensor_suite.tracked_objects
         if not tracks:
@@ -79,7 +80,7 @@ class BehaviorPlanner:
             # Check if track is ahead in lane corridor
             if long_road > 0.0:
                 #v_lat = float(np.dot(track.velocity, n_road))
-                effective_lat_threshold = 2.5
+                effective_lat_threshold = BP.MERGE_HAZARD_LAT_RANGE_METERS
                 #lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
                 if abs(lat_road) <= effective_lat_threshold:
                     if long_road < closest_dist:
@@ -93,7 +94,7 @@ class BehaviorPlanner:
             self, 
             ego: EgoState, 
             sensor_suite: SensorSuite, 
-            merge_threshold: float = 25.0
+            merge_threshold: float = BP.LANE_MERGE_LOOKAHED_DISTANCE_METERS
         ) -> Track | None:
         """
         Selects the active lead vehicle track. If a merge point is within threshold, scans adjacent merging corridors for hazard vehicles and assigns them as lead.
@@ -140,11 +141,11 @@ class BehaviorPlanner:
 
             # Scan corridor including current lane and target merging lane offset
             if target_offset==0.0:
-                in_merge_corridor = (abs(lat_road) <= 3.5) 
+                in_merge_corridor = (abs(lat_road) <= MAP.DEFAULT_LANE_WIDTH_METERS) 
             else:
-                in_merge_corridor = (abs(lat_road - target_offset) <= 2)
+                in_merge_corridor = (abs(lat_road - target_offset) <= MAP.DEFAULT_LANE_WIDTH_METERS/2)
 
-            if (-10 < long_road  < ego.velocity*3  ) and in_merge_corridor:
+            if (BP.MERGE_HAZARD_REAR_RANGE_METERS < long_road  < ego.velocity*BP.TTC_MAX  ) and in_merge_corridor:
                 if long_road < closest_dist:
                     closest_dist = long_road
                     hazard_track = track
@@ -186,13 +187,15 @@ class BehaviorPlanner:
         dist_to_merge = self.map_module.get_distance_to_next_merge(ego=ego)
 
        
-        self.is_checking_merge = (dist_to_merge <= ego.velocity*2.3)
+        self.is_checking_merge = (dist_to_merge <= ego.velocity*BP.MERGE_TIME_MAX)
         if self.is_checking_merge:
-            clearance = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
-                                         target_offset=self.target_offset,
-                                         safety_gap_front=10.0,
-                                         safety_gap_rear=8.0,
-                                         lane_tolerance=1.8)
+            clearance = sensor_suite.is_lane_change_safe_from_tracks(
+                    ego=ego,
+                    target_offset=self.target_offset,
+                    safety_gap_front=BP.DEFAULT_SAFETY_GAP_FRONT,
+                    safety_gap_rear=BP.DEFAULT_SAFETY_GAP_REAR,
+                    lane_tolerance=MAP.DEFAULT_LANE_WIDTH_METERS/2
+                    )
             if not clearance.is_safe:
                 print(f" [Step {step}] Merge hazard detected within {dist_to_merge:.1f}m! Preemptively adjusting velocity.")
             
@@ -211,7 +214,7 @@ class BehaviorPlanner:
             lat_progress = np.dot(disp_vec, n_road)
             
 
-            if abs(lat_progress) >= 0.85 * abs(self.target_offset):
+            if abs(lat_progress) >= BP.LANE_CHANGE_COMPLETION_RATIO * abs(self.target_offset):
                 print(f" [Step {step} Lane change complete. Transitioning back to LANE_KEEP/ MAP_FOLLOW.")
                 self.state = "LANE_KEEP"
                 self.target_offset = 0.0
@@ -225,11 +228,13 @@ class BehaviorPlanner:
         if distance_traveled < self.start_distance:
             return self.state, current_path
 
-        lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(ego=ego,
-                                         target_offset=self.target_offset,
-                                         safety_gap_front=10.0,
-                                         safety_gap_rear=8.0,
-                                         lane_tolerance=1.8)
+        lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(
+                ego=ego,
+                target_offset=self.target_offset,
+                safety_gap_front=BP.DEFAULT_SAFETY_GAP_FRONT,
+                safety_gap_rear=BP.DEFAULT_SAFETY_GAP_REAR,
+                lane_tolerance=MAP.DEFAULT_LANE_WIDTH_METERS/2
+                )
 
 
         if lane_change_clearance_flags.is_safe:
@@ -239,7 +244,7 @@ class BehaviorPlanner:
             new_path = generate_lane_change_path(
                 ego=ego,
                 target_lane_offset=self.target_offset,
-                total_length=120.0
+                total_length=BP.MANEUVER_PATH_LENGTH_METERS
             )
             return self.state, new_path
 
