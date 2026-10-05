@@ -15,10 +15,23 @@ class BehaviorConfig:
     MANEUVER_PATH_LENGTH_METERS = 120.0
 
 @dataclass(frozen=True)
+class CBFConfig:
+    GAMMA = 1.2
+    SAFETY_DISTANCE_BUFFER_METERS = 6.0
+    DEFAULT_HEADWAY_BUFFER_SEC = 0.5 
+    MAX_BRAKING_ACCEL_MPS2 = -8.0
+    DEFAULT_MAX_FORWARD_ACCEL_MPS2 = 2.0
+
+
+@dataclass(frozen=True)
 class DataAssociationConfig:
     GATING_PENALTY_COST = 1e5 
     GATING_THRESHOLD = 10.0
     MAX_ASSIGNMENT_DISTANCE = 5.0
+
+@dataclass(frozen=True)
+class EgoConfig():
+    STEERING_MIN_SENSITIVITY = 1e-6
 
 @dataclass(frozen=True)
 class KalmanConfig:
@@ -43,6 +56,15 @@ class MapConfig:
     DEFAULT_EXTRACTION_HORIZON_METERS = 200.0
     DEFAULT_RESAMPLING_STEP_METERS = 0.5
     WAYPOINT_DEDUP_TOLERANCE = 1e-5
+
+@dataclass(frozen=True)
+class RadarConfig:
+    DEFAULT_RADAR_MAX_RANGE = 70.0
+    DEFAULT_RADAR_FOV_DEG = 60.0
+    DEFAULT_RADAR_RANGE_NOISE_STD = 0.5
+    LANE_CHANGE_SAFETY_GAP_FRONT = 12.0
+    LANE_CHANGE_SAFETY_GAP_REAR = 10.0
+
 
 @dataclass(frozen=True)
 class ScenarioConfig:
@@ -76,10 +98,13 @@ class VehicleConfig:
     DEFAULT_VELOCITY = 15.0
 
 BP = BehaviorConfig()
+CBF = CBFConfig()
 DA = DataAssociationConfig()
+EGO = EgoConfig()
 KALMAN = KalmanConfig()
 LATERAL = LateralConfig()
 MAP = MapConfig()
+RADAR = RadarConfig()
 SCENARIO = ScenarioConfig()
 STANLEY = StanleyConfig()
 TEST = TestConfig()
