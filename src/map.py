@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 from scipy.interpolate import interp1d
 
+from src.config import MAP
 from src.ego_state import EgoState
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ class MapModule:
         self.planning_problem_set = planning_problem_set
         self.lanelet_network = scenario.lanelet_network
 
-    def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = 100.0) -> float:
+    def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = MAP.DEFAULT_LOOKAHEAD_HORIZON_METERS) -> float:
         """
         Computes distance from ego's current position to the next upcoming lane merge.
         Detects both ego's lane merging into another lane and another lane merging into ego's lane.
@@ -130,7 +131,7 @@ class MapModule:
 
         return float(np.arctan2(dy, dx))
 
-    def get_current_lane_width(self, ego: EgoState, default_width: float = 3.5) -> float:
+    def get_current_lane_width(self, ego: EgoState, default_width: float = MAP.DEFAULT_LANE_WIDTH_METERS) -> float:
         """
         Computes the local lane width surrounding the Ego vehicle's current position.
 
@@ -163,8 +164,8 @@ class MapModule:
     def extract_target_lanelet_path(
         self,
         ego: EgoState,
-        horizon_meters: float = 200.0,
-        resampling_step: float = 0.5,
+        horizon_meters: float = MAP.DEFAULT_EXTRACTION_HORIZON_METERS,
+        resampling_step: float = MAP.DEFAULT_RESAMPLING_STEP_METERS,
     ) -> np.ndarray:
         """
         Extracts a sequence of lanelets connecting Ego to the goal using BFS,
