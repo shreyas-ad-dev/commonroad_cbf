@@ -5,6 +5,7 @@ from enum import Enum, auto
 
 import numpy as np
 
+from src.config import KALMAN, TEST, TRACK 
 
 class TrackState(Enum):
     TENTATIVE = auto()
@@ -30,14 +31,19 @@ class KalmanFilter2D:
     State vector x: [px, py, vx, vy]^T
     Measurement vector z: [px, py]^T
     """
-    def __init__(self, init_pos: np.ndarray, dt: float = 0.1):
+    def __init__(self, init_pos: np.ndarray, dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC):
         self.dt = dt
 
         # Initial state estimate [px, py, vx, vy]
         self.x = np.array([init_pos[0], init_pos[1], 0.0, 0.0], dtype=np.float64)
 
         # Initial state covariance
-        self.P = np.diag([1.0, 1.0, 10.0, 10.0])
+        self.P = np.diag([
+            KALMAN.INITIAL_POSITION_VAR,
+            KALMAN.INITIAL_POSITION_VAR,
+            KALMAN.INITIAL_VELOCITY_VAR,
+            KALMAN.INITIAL_VELOCITY_VAR
+            ]).astype(np.float64)
 
         # State transition matrix (Constant Velocity Model)
         self.F = np.array([
@@ -54,10 +60,10 @@ class KalmanFilter2D:
         ], dtype=np.float64)
 
         # Process noise covariance matrix
-        q_var = 0.5  # Process noise magnitude
+        q_var = KALMAN.DEFAULT_PROCESS_NOISE_VAR  # Process noise magnitude
         G = np.array([
-            [0.5 * dt**2, 0.0],
-            [0.0, 0.5 * dt**2],
+            [KALMAN.DEFAULT_PROCESS_NOISE_VAR * dt**2, 0.0],
+            [0.0, KALMAN.DEFAULT_PROCESS_NOISE_VAR * dt**2],
             [dt, 0.0],
             [0.0, dt]
         ])
@@ -88,9 +94,9 @@ class Track:
         self,
         track_id: int,
         detection: Detection,
-        dt: float = 0.1,
-        confirm_hits: int = 3,
-        max_age: int = 5
+        dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC,
+        confirm_hits: int = TRACK.MIN_HITS_TO_CONFIRM,
+        max_age: int = TRACK.MAX_MISSED_DETECTIONS 
     ):
         self.track_id = track_id
         self.state = TrackState.TENTATIVE
