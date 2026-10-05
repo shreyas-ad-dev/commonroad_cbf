@@ -44,7 +44,13 @@ class StanleyConfig:
 @dataclass(frozen=True)
 class VehicleConfig:
     DEFAULT_WHEELBASE = 2.8
+    DEFAULT_LENGTH = 4.5
 
+@dataclass(frozen=True)
+class UltrasonicConfig:
+    DEFAULT_USS_MAX_RANGE = 8.0
+    DEFAULT_USS_FOV_DEG = 100.0
+    DEFAULT_USS_NOISE_STD = 0.1
 
 
 TEST = TestConfig()
@@ -53,4 +59,5 @@ KALMAN = KalmanConfig()
 TRACK = TrackConfig()
 LATERAL = LateralConfig()
 STANLEY = StanleyConfig()
+USS = UltrasonicConfig()
 VEHICLE = VehicleConfig()
