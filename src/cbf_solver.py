@@ -8,6 +8,7 @@ try:
 except ImportError:
     CVXPY_AVAILABLE = False
 
+from src.config import CBF
 from src.ego_state import EgoState
 from src.tracker import Track
 
@@ -21,11 +22,11 @@ class CBFQPSolver:
     """
     
     def __init__(self, 
-                 gamma: float = 1.2, 
-                 d_min: float = 6.0, 
-                 tau: float = 0.5, 
-                 a_min: float = -8.0, 
-                 a_max: float = 2.0,
+                 gamma: float = CBF.GAMMA, 
+                 d_min: float = CBF.SAFETY_DISTANCE_BUFFER_METERS, 
+                 tau: float = CBF.DEFAULT_HEADWAY_BUFFER_SEC, 
+                 a_min: float = CBF.MAX_BRAKING_ACCEL_MPS2, 
+                 a_max: float = CBF.DEFAULT_MAX_FORWARD_ACCEL_MPS2,
                  use_cvxpy: bool = False):
         """
         Initializes the CBFQPSolver instance.

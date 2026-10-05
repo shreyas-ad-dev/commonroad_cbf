@@ -8,6 +8,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from src.base_sensor import BaseSensor, SensorOcclusionData
+from src.config import MAP, RADAR, VEHICLE, TEST
 from src.ego_state import EgoState, get_car_polygon
 from src.tracker import Detection
 
@@ -26,10 +27,10 @@ class RadarSensor(BaseSensor):
         """
 
     def __init__(self,
-                 range_max: float = 70.0,
-                 fov_deg: float = 60.0,
+                 range_max: float = RADAR.DEFAULT_RADAR_MAX_RANGE,
+                 fov_deg: float = RADAR.DEFAULT_RADAR_FOV_DEG,
                  mount_position: str = "front",
-                 noise_std: float = 0.5,
+                 noise_std: float = RADAR.DEFAULT_RADAR_RANGE_NOISE_STD,
                  ray_count: int = 40):
         """
         Initializes the RadarSensor instance.
@@ -136,7 +137,7 @@ class RadarSensor(BaseSensor):
 
             sensor_pos, sensor_heading = self._get_sensor_transform(ego)
             fov_wedge = self._build_fov_wedge(sensor_pos, sensor_heading)
-            timestamp = step * 0.1 # 10 Hz step delta time
+            timestamp = step * TEST.DEFAULT_SAMPLING_TIME_SEC # 10 Hz step delta time
 
             valid_obstacles = []
             for obs in obstacles:
@@ -146,8 +147,8 @@ class RadarSensor(BaseSensor):
                     continue
 
                 center_local, local_points = eval_data
-                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', 4.5))
-                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', 4.5))
+                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', VEHICLE.DEFAULT_LENGTH))
+                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', VEHICLE.DEFAULT_WHEELBASE))
                 obs_yaw = getattr(st, 'orientation', getattr(st, 'yaw', 0.0))
 
                 obs_poly, _ = get_car_polygon(
@@ -290,7 +291,7 @@ class RadarSensor(BaseSensor):
                            ego: EgoState,
                            obstacles: list,
                            step: int,
-                           lane_corridor_width: float = 2.5,
+                           lane_corridor_width: float = MAP.DEFAULT_LANE_WIDTH_METERS,
                            target_offset: float = 0.0,
                            ) -> tuple[float, float, float, int, float] | None:
         """
@@ -340,9 +341,9 @@ class RadarSensor(BaseSensor):
 
                 if in_corridor and (occ_data.min_dist < closest_dist):
                     closest_dist = occ_data.min_dist
-                    target_v = float(getattr(st, 'velocity', 15.0))
+                    target_v = float(getattr(st, 'velocity', VEHICLE.DEFAULT_VELOCITY))
                     # Calculate bumper-to-bumper longitudinal distance offset
-                    obs_length = getattr(obs.obstacle_shape, 'length', 4.5)
+                    obs_length = getattr(obs.obstacle_shape, 'length', VEHICLE.DEFAULT_LENGTH)
                     ego_length = ego.length
                     bumper_x_local = max(0.1, occ_data.center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
 
@@ -354,10 +355,10 @@ class RadarSensor(BaseSensor):
                                surrounding_obstacles: list,
                                step: int,
                                target_lane_offset: float,
-                               safety_gap_front: float = 12.0,
-                               safety_gap_rear: float = 10.0,
+                               safety_gap_front: float = RADAR.LANE_CHANGE_SAFETY_GAP_FRONT,
+                               safety_gap_rear: float = RADAR.LANE_CHANGE_SAFETY_GAP_REAR,
                                rear_radar: "RadarSensor | None" = None,
-                               lane_tolerance: float = 1.8) -> bool:
+                               lane_tolerance: float = MAP.DEFAULT_LANE_WIDTH_METERS/2) -> bool:
         """
         Evaluates whether an adjacent lane target gap is clear using front and rear radars.
 

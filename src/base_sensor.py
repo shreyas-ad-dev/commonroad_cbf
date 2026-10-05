@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.config import VEHICLE
 from src.ego_state import EgoState, get_car_polygon
 
 
@@ -99,8 +100,8 @@ class BaseSensor:
         local_obs_pos_center = self.to_local_frame(ego, st.position[0], st.position[1])
 
         # Extract dimensions & calculate world-frame corners
-        length = getattr(obstacle.obstacle_shape, "length", 4.5)
-        width = getattr(obstacle.obstacle_shape, "width", 2.0)
+        length = getattr(obstacle.obstacle_shape, "length", VEHICLE.DEFAULT_LENGTH)
+        width = getattr(obstacle.obstacle_shape, "width", VEHICLE.DEFAULT_WHEELBASE)
         o_orient = getattr(st, "orientation", 0.0)
         _, obs_corners = get_car_polygon(st.position[0], st.position[1], o_orient, length=length, width=width)
 

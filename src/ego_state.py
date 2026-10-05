@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from shapely.geometry import Polygon
 
+from src.config import EGO, TEST
 
 def get_car_polygon(
         x: float, 
@@ -187,7 +188,7 @@ class EgoState:
     def update_kinematics(self, 
                           accel: float, 
                           steering_angle: float = 0.0, 
-                          dt: float = 0.1
+                          dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC 
                           ) -> None:
         """
         Integrates vehicle state forward in time using a Kinematic Bicycle Model.
@@ -209,7 +210,7 @@ class EgoState:
         self.y += v_avg * np.sin(self.orientation) * dt
 
         # 3. Update heading angle (yaw rate = v_avg / L * tan(delta))
-        if abs(steering_angle) > 1e-6:
+        if abs(steering_angle) > EGO.STEERING_MIN_SENSITIVITY:
             self.orientation += (v_avg / self.wheelbase) * np.tan(steering_angle) * dt
 
         # 4. Commit updated speed
