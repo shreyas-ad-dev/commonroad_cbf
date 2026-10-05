@@ -3,6 +3,18 @@
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
+class BehaviorConfig:
+    LANE_MERGE_LOOKAHED_DISTANCE_METERS = 25.0
+    MERGE_HAZARD_REAR_RANGE_METERS = -10.0
+    MERGE_HAZARD_LAT_RANGE_METERS = 2.5
+    TTC_MAX = 3
+    MERGE_TIME_MAX = 2.3
+    DEFAULT_SAFETY_GAP_FRONT = 10.0
+    DEFAULT_SAFETY_GAP_REAR = 8.0
+    LANE_CHANGE_COMPLETION_RATIO = 0.85
+    MANEUVER_PATH_LENGTH_METERS = 120.0
+
+@dataclass(frozen=True)
 class DataAssociationConfig:
     GATING_PENALTY_COST = 1e5 
     GATING_THRESHOLD = 10.0
@@ -63,7 +75,7 @@ class VehicleConfig:
     DEFAULT_LENGTH = 4.5
     DEFAULT_VELOCITY = 15.0
 
-
+BP = BehaviorConfig()
 DA = DataAssociationConfig()
 KALMAN = KalmanConfig()
 LATERAL = LateralConfig()
