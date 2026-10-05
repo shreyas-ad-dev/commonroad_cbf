@@ -271,7 +271,7 @@ class MapModule:
         distances = np.zeros(len(center_verts))
         distances[1:] = np.cumsum(np.hypot(np.diff(center_verts[:, 0]), np.diff(center_verts[:, 1])))
 
-        unique_indices = np.where(np.diff(distances, prepend=-1.0) > 1e-5)[0]
+        unique_indices = np.where(np.diff(distances, prepend=-1.0) > MAP.WAYPOINT_DEDUP_TOLERANCE)[0]
         distances = distances[unique_indices]
         center_verts = center_verts[unique_indices]
 
