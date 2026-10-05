@@ -3,13 +3,13 @@
 import numpy as np
 
 from src.ego_state import EgoState
-
+from src.config import LATERAL, STANLEY, VEHICLE
 
 def generate_lane_change_path(
     ego: EgoState,
-    target_lane_offset: float = 3.5,
-    total_length: float = 150.0,
-    num_points: int = 200) -> np.ndarray:
+    target_lane_offset: float = LATERAL.DEFAULT_LANE_WIDTH_METERS,
+    total_length: float = LATERAL.DEFAULT_PATH_LOOKAHEAD_DISTANCE,
+    num_points: int = LATERAL.DEFAULT_NUM_WAYPOINTS) -> np.ndarray:
     """
     Generates reference waypoints for a smooth lane change maneuver along any road heading.
 
@@ -29,9 +29,9 @@ def generate_lane_change_path(
     s = np.linspace(0, total_length, num_points)
 
     # 2. Smooth S-curve transition profile (Quintic polynomial)
-    start_lc, lc_length = 10.0, 35.0
+    start_lc, lc_length = LATERAL.LANE_CHANGE_START_X, LATERAL.MANEUVER_S_LENGHT
     t = np.clip((s - start_lc) / lc_length, 0.0, 1.0)
-    d_offset = target_lane_offset * (6 * t**5 - 15 * t**4 + 10 * t**3)
+    d_offset = target_lane_offset * (LATERAL.QPC_5 * t**5 - LATERAL.QPC_4 * t**4 + LATERAL.QPC_3 * t**3)
 
     # 3. Direction vectors: Forward (u_hat) and Perpendicular Normal (n_hat)
     u_hat, n_hat = ego.road_frame_vectors
@@ -50,10 +50,10 @@ class StanleyController:
     """
     
     def __init__(self,
-                 k: float = 0.5,
-                 k_soft: float = 1.0,
-                 max_steer_deg: float = 25.0,
-                 wheelbase: float = 2.8):
+                 k: float = STANLEY.DEFAULT_STANLEY_GAIN,
+                 k_soft: float = STANLEY.DEFAULT_SOFTENING_GAIN,
+                 max_steer_deg: float = STANLEY.DEFAULT_MAX_STEER_DEG,
+                 wheelbase: float = VEHICLE.DEFAULT_WHEELBASE):
         """
         Initializes the StanleyController instance.
 
