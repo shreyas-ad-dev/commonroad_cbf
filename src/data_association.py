@@ -3,10 +3,11 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from src.config import DA
 from src.tracker import Detection, Track
 
 
-def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_distance: float = 10.0) -> np.ndarray:
+def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_distance: float = DA.GATING_THRESHOLD) -> np.ndarray:
     """Computes the cost (distance) matrix between active tracks and new detections.
     
     Unfeasible pairs exceeding max_distance are assigned a high gating cost.
@@ -17,7 +18,7 @@ def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_di
     if num_tracks == 0 or num_detections == 0:
         return np.empty((num_tracks, num_detections))
 
-    cost_matrix = np.full((num_tracks, num_detections), fill_value=1e5, dtype=np.float64)
+    cost_matrix = np.full((num_tracks, num_detections), fill_value=DA.GATING_PENALTY_COST, dtype=np.float64)
 
     for i, track in enumerate(tracks):
         track_pos = track.position  # [px, py]
@@ -35,7 +36,7 @@ def compute_cost_matrix(tracks: list[Track], detections: list[Detection], max_di
 def associate_detections_to_tracks(
     tracks: list[Track],
     detections: list[Detection],
-    max_distance: float = 5.0
+    max_distance: float = DA.MAX_ASSIGNMENT_DISTANCE
 ) -> tuple[list[tuple[int, int]], list[int], list[int]]:
     """Performs optimal bipartite matching between predicted tracks and incoming detections.
     
