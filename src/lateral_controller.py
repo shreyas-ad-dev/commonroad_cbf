@@ -3,11 +3,11 @@
 import numpy as np
 
 from src.ego_state import EgoState
-from src.config import LATERAL, STANLEY, VEHICLE
+from src.config import LATERAL, MAP, STANLEY, VEHICLE
 
 def generate_lane_change_path(
     ego: EgoState,
-    target_lane_offset: float = LATERAL.DEFAULT_LANE_WIDTH_METERS,
+    target_lane_offset: float = MAP.DEFAULT_LANE_WIDTH_METERS,
     total_length: float = LATERAL.DEFAULT_PATH_LOOKAHEAD_DISTANCE,
     num_points: int = LATERAL.DEFAULT_NUM_WAYPOINTS) -> np.ndarray:
     """
