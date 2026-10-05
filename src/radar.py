@@ -291,7 +291,7 @@ class RadarSensor(BaseSensor):
                            ego: EgoState,
                            obstacles: list,
                            step: int,
-                           lane_corridor_width: float = MAP.DEFAULT_LANE_WIDTH_METERS,
+                           lane_corridor_width: float = MAP.DEFAULT_LANE_WIDTH_METERS, # was set to 2.5 earlier
                            target_offset: float = 0.0,
                            ) -> tuple[float, float, float, int, float] | None:
         """
