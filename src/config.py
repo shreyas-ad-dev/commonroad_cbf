@@ -32,6 +32,9 @@ class MapConfig:
     DEFAULT_RESAMPLING_STEP_METERS = 0.5
     WAYPOINT_DEDUP_TOLERANCE = 1e-5
 
+@dataclass(frozen=True)
+class ScenarioConfig:
+    OBSTACLE_MATCHING_ATOL = 1.5
 
 @dataclass(frozen=True)
 class StanleyConfig:
@@ -58,12 +61,14 @@ class UltrasonicConfig:
 class VehicleConfig:
     DEFAULT_WHEELBASE = 2.8
     DEFAULT_LENGTH = 4.5
+    DEFAULT_VELOCITY = 15.0
 
 
 DA = DataAssociationConfig()
 KALMAN = KalmanConfig()
 LATERAL = LateralConfig()
 MAP = MapConfig()
+SCENARIO = ScenarioConfig()
 STANLEY = StanleyConfig()
 TEST = TestConfig()
 TRACK = TrackConfig()
