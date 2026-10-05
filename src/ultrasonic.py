@@ -8,6 +8,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from src.base_sensor import BaseSensor, SensorOcclusionData
+from src.config import TEST, USS, VEHICLE
 from src.ego_state import EgoState, get_car_polygon
 from src.tracker import Detection
 
@@ -26,10 +27,10 @@ class SideUltrasonicSensor(BaseSensor):
     """
     
     def __init__(self,
-                 range_max: float = 8.0,
-                 fov_deg: float = 100.0,
+                 range_max: float = USS.DEFAULT_USS_MAX_RANGE,
+                 fov_deg: float = USS.DEFAULT_USS_FOV_DEG,
                  side: str = "left",
-                 noise_std: float = 0.1,
+                 noise_std: float = USS.DEFAULT_USS_NOISE_STD,
                  ray_count: int = 30):
         """
         Initializes the SideUltrasonicSensor instance.
@@ -132,7 +133,7 @@ class SideUltrasonicSensor(BaseSensor):
             detections: list[Detection] = []
             fov_data: dict[int, SensorOcclusionData] = {}
 
-            timestamp = step * 0.1
+            timestamp = step * TEST.DEFAULT_SAMPLING_TIME_SEC
 
             sensor_pos, sensor_heading = self._get_sensor_transform(ego)
             fov_wedge = self._build_fov_wedge(sensor_pos, sensor_heading)
@@ -145,8 +146,8 @@ class SideUltrasonicSensor(BaseSensor):
                     continue
 
                 center_local, local_points = eval_data
-                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', 4.5))
-                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', 2.0))
+                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', VEHICLE.DEFAULT_WHEELBASE))
+                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', VEHICLE.DEFAULT_LENGTH ))
                 obs_yaw = getattr(st, 'orientation', getattr(st, 'yaw', 0.0))
 
                 obs_poly, _ = get_car_polygon(
