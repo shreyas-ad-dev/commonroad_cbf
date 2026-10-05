@@ -23,8 +23,34 @@ class TrackConfig:
     MIN_HITS_TO_CONFIRM = 3
     MAX_MISSED_DETECTIONS = 5
 
+@dataclass(frozen=True)
+class LateralConfig:
+    DEFAULT_LANE_WIDTH_METERS = 3.5
+    DEFAULT_PATH_LOOKAHEAD_DISTANCE = 150.0
+    DEFAULT_NUM_WAYPOINTS = 200
+    LANE_CHANGE_START_X = 10.0
+    MANEUVER_S_LENGHT = 35.0
+    QPC_5 = 6
+    QPC_4 = 15
+    QPC_3 = 10
+    
+@dataclass(frozen=True)
+class StanleyConfig:
+    DEFAULT_STANLEY_GAIN = 0.5
+    DEFAULT_SOFTENING_GAIN = 1.0
+    DEFAULT_MAX_STEER_DEG = 25.0
+
+
+@dataclass(frozen=True)
+class VehicleConfig:
+    DEFAULT_WHEELBASE = 2.8
+
+
 
 TEST = TestConfig()
 DA = DataAssociationConfig()
 KALMAN = KalmanConfig()
 TRACK = TrackConfig()
+LATERAL = LateralConfig()
+STANLEY = StanleyConfig()
+VEHICLE = VehicleConfig()
