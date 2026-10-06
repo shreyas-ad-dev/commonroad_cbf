@@ -101,7 +101,7 @@ class BaseSensor:
 
         # Extract dimensions & calculate world-frame corners
         length = getattr(obstacle.obstacle_shape, "length", VEHICLE.DEFAULT_LENGTH)
-        width = getattr(obstacle.obstacle_shape, "width", VEHICLE.DEFAULT_WHEELBASE)
+        width = getattr(obstacle.obstacle_shape, "width", VEHICLE.DEFAULT_WIDTH)
         o_orient = getattr(st, "orientation", 0.0)
         _, obs_corners = get_car_polygon(st.position[0], st.position[1], o_orient, length=length, width=width)
 

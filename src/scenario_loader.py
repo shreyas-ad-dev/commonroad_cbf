@@ -72,7 +72,7 @@ def load_scenario_and_ego(xml_path: Path):
     # 2. Extract vehicle dimensions
     if ego_obstacle is not None:
         ego_l = float(getattr(ego_obstacle.obstacle_shape, 'length', VEHICLE.DEFAULT_LENGTH))
-        ego_w = float(getattr(ego_obstacle.obstacle_shape, 'width', VEHICLE.DEFAULT_WHEELBASE))
+        ego_w = float(getattr(ego_obstacle.obstacle_shape, 'width', VEHICLE.DEFAULT_WIDTH))
         ego_id = ego_obstacle.obstacle_id
         # Override velocity/orientation from matched obstacle if available
         if hasattr(ego_obstacle.initial_state, 'velocity'):
@@ -82,7 +82,7 @@ def load_scenario_and_ego(xml_path: Path):
     else:
         # Synthetic Ego parameters (USA style)
         ego_l = VEHICLE.DEFAULT_LENGTH 
-        ego_w = VEHICLE.DEFAULT_WHEELBASE
+        ego_w = VEHICLE.DEFAULT_WIDTH
         ego_id = "Ego_Synthetic"
 
     ego_params = {
