@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from src.config import DA, MAP, SENSOR, TEST, TRACK
 from src.data_association import associate_detections_to_tracks
 from src.ego_state import EgoState
 from src.radar import RadarSensor
@@ -16,7 +17,12 @@ class MultiObjectTracker:
     Manages track creation, prediction, association, updates, and deletion across time steps.
     """
 
-    def __init__(self, dt: float = 0.1, confirm_hits: int = 3, max_age: int = 5, max_distance: float = 5.0):
+    def __init__(self,
+                 dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC,
+                 confirm_hits: int = TRACK.MIN_HITS_TO_CONFIRM ,
+                 max_age: int = TRACK.MAX_MISSED_DETECTIONS,
+                 max_distance: float = DA.MAX_ASSIGNMENT_DISTANCE):
+
         self.dt = dt
         self.confirm_hits = confirm_hits
         self.max_age = max_age
@@ -111,8 +117,8 @@ class SensorSuite:
         rear_radar: RadarSensor | None = None,
         uss_left: SideUltrasonicSensor | None = None,
         uss_right: SideUltrasonicSensor | None = None,
-        max_perception_radius: float = 85.0,
-        dt: float = 0.1
+        max_perception_radius: float = SENSOR.DEFAULT_MAX_PERCEPTIONT_RADIUS,
+        dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC
     ):
         self.front_radar = front_radar
         self.rear_radar = rear_radar
@@ -223,23 +229,23 @@ class SensorSuite:
         )
         return self.latest_perception
 
-    def track_lead(self, ego: EgoState, step: int, target_offset: float = 0.0):
-        obstacles = self.latest_perception.filtered_obstacles or []
-        self.latest_perception.lead_target = self.front_radar.track_lead_vehicle(
-            ego=ego,
-            obstacles=obstacles,
-            step=step,
-            target_offset=target_offset
-        )
-        return self.latest_perception.lead_target
+   # def track_lead(self, ego: EgoState, step: int, target_offset: float = 0.0):
+   #     obstacles = self.latest_perception.filtered_obstacles or []
+   #     self.latest_perception.lead_target = self.front_radar.track_lead_vehicle(
+   #         ego=ego,
+   #         obstacles=obstacles,
+   #         step=step,
+   #         target_offset=target_offset
+   #     )
+   #     return self.latest_perception.lead_target
 
     def is_lane_change_safe_from_tracks(
         self,
         ego: EgoState,
         target_offset: float,
-        safety_gap_front: float = 12.0,
-        safety_gap_rear: float = 8.0,
-        lane_tolerance: float = 1.8
+        safety_gap_front: float = SENSOR.LANE_CHANGE_SAFETY_GAP_FRONT,
+        safety_gap_rear: float = SENSOR.LANE_CHANGE_SAFETY_GAP_REAR,
+        lane_tolerance: float = MAP.DEFAULT_LANE_WIDTH_METERS 
     ) -> LaneClearanceResult:
         """
         Evaluates lane clearance using filtered tracking states instead of raw scans.
