@@ -62,13 +62,17 @@ class RadarConfig:
     DEFAULT_RADAR_MAX_RANGE = 70.0
     DEFAULT_RADAR_FOV_DEG = 60.0
     DEFAULT_RADAR_RANGE_NOISE_STD = 0.5
-    LANE_CHANGE_SAFETY_GAP_FRONT = 12.0
-    LANE_CHANGE_SAFETY_GAP_REAR = 10.0
-
-
+    
 @dataclass(frozen=True)
 class ScenarioConfig:
     OBSTACLE_MATCHING_ATOL = 1.5
+
+@dataclass(frozen=True)
+class SensorSuiteConfig:
+    DEFAULT_MAX_PERCEPTIONT_RADIUS = 85.0
+    LANE_CHANGE_SAFETY_GAP_FRONT = 12.0
+    LANE_CHANGE_SAFETY_GAP_REAR = 10.0
+
 
 @dataclass(frozen=True)
 class StanleyConfig:
@@ -107,6 +111,7 @@ LATERAL = LateralConfig()
 MAP = MapConfig()
 RADAR = RadarConfig()
 SCENARIO = ScenarioConfig()
+SENSOR = SensorSuiteConfig()
 STANLEY = StanleyConfig()
 TEST = TestConfig()
 TRACK = TrackConfig()
