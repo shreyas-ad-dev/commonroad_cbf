@@ -146,8 +146,8 @@ class SideUltrasonicSensor(BaseSensor):
                     continue
 
                 center_local, local_points = eval_data
-                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', VEHICLE.DEFAULT_WHEELBASE))
-                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', VEHICLE.DEFAULT_LENGTH ))
+                obs_length = getattr(obs.obstacle_shape, 'length', getattr(st, 'length', VEHICLE.DEFAULT_LENGTH))
+                obs_width = getattr(obs.obstacle_shape, 'width', getattr(st, 'width', VEHICLE.DEFAULT_WIDTH))
                 obs_yaw = getattr(st, 'orientation', getattr(st, 'yaw', 0.0))
 
                 obs_poly, _ = get_car_polygon(
