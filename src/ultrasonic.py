@@ -64,14 +64,19 @@ class SideUltrasonicSensor(BaseSensor):
         }
 
 
-    def _get_sensor_transform(self, ego: EgoState) -> tuple[np.ndarray, float]:
+    def _get_sensor_transform(self,
+                              ego: EgoState
+                              ) -> tuple[np.ndarray, float]:
         """Calculates world frame position and heading for the side ultrasonic sensor."""
         sensor_pos = ego.position
         heading_deg = np.degrees(ego.orientation)
         sensor_heading_deg = heading_deg + 90.0 if self.side == "left" else heading_deg - 90.0
         return sensor_pos, sensor_heading_deg
 
-    def _build_fov_wedge(self, sensor_pos: np.ndarray, sensor_heading_deg: float) -> ShapelyPolygon:
+    def _build_fov_wedge(self,
+                         sensor_pos: np.ndarray,
+                         sensor_heading_deg: float
+                         ) -> ShapelyPolygon:
         """Constructs Shapely polygon FOV wedge for the ultrasonic sensor."""
         t1 = sensor_heading_deg - (self.fov_deg / 2.0)
         t2 = sensor_heading_deg + (self.fov_deg / 2.0)
@@ -83,7 +88,10 @@ class SideUltrasonicSensor(BaseSensor):
         ]
         return ShapelyPolygon([tuple(sensor_pos)] + arc_pts + [tuple(sensor_pos)])
 
-    def _compute_occlusion_shadow(self, sensor_pos: np.ndarray, obs_poly: ShapelyPolygon) -> ShapelyPolygon | None:
+    def _compute_occlusion_shadow(self,
+                                  sensor_pos: np.ndarray,
+                                  obs_poly: ShapelyPolygon
+                                  ) -> ShapelyPolygon | None:
         """Computes projection shadow polygon cast behind an obstacle."""
         pts = np.array(obs_poly.exterior.coords)[:-1]
         if len(pts) == 0:
@@ -111,7 +119,8 @@ class SideUltrasonicSensor(BaseSensor):
              ego: EgoState,
              obstacles: list,
              step: int,
-             target_offset: float = 0.0) -> dict[str, Any]:
+             target_offset: float = 0.0
+             ) -> dict[str, Any]:
         """
         Executes perception checks and updates instance-level cache if step has changed.
 
@@ -270,45 +279,46 @@ class SideUltrasonicSensor(BaseSensor):
     def get_detections(self,
                        ego: EgoState,
                        obstacles: list,
-                       step: int) -> list[Detection]:
+                       step: int
+                       ) -> list[Detection]:
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
     
-    def get_detected_obstacle_ids(self,
-                                  ego: EgoState,
-                                  obstacles: list,
-                                  step: int) -> set[int]:
-        """
-        Returns cached set of detected obstacle IDs for current step.
+#    def get_detected_obstacle_ids(self,
+#                                  ego: EgoState,
+#                                  obstacles: list,
+#                                  step: int) -> set[int]:
+#        """
+#        Returns cached set of detected obstacle IDs for current step.
+#
+#        Args:
+#            ego (EgoState): Current state of the Ego vehicle.
+#            obstacles (list): List of dynamic obstacle objects.
+#            step (int): Current simulation time step index.
+#
+#        Returns:
+#            set[int]: Set of unique obstacle IDs currently in FOV.
+#        """
+#        
+#        return self.scan(ego, obstacles, step)["detected_ids"]
 
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacles (list): List of dynamic obstacle objects.
-            step (int): Current simulation time step index.
-
-        Returns:
-            set[int]: Set of unique obstacle IDs currently in FOV.
-        """
-        
-        return self.scan(ego, obstacles, step)["detected_ids"]
-
-    def is_adjacent_lane_clear(self,
-                               ego: EgoState,
-                               obstacles: list,
-                               step: int,
-                               target_offset: float) -> bool:
-        """
-        Returns cached lane clearance boolean for given target offset and current step.
-
-        Args:
-            ego (EgoState): Current state of the Ego vehicle.
-            obstacles (list): List of dynamic obstacle objects.
-            step (int): Current simulation time step index.
-            target_offset (float): Target lateral lane offset (+ for left, - for right).
-
-        Returns:
-            bool: True if blind spot is clear for target lane change, False otherwise.
-        """
-        
-        cache = self.scan(ego, obstacles, step, target_offset=target_offset)
-        return cache["target_clearance"][target_offset]
+#    def is_adjacent_lane_clear(self,
+#                               ego: EgoState,
+#                               obstacles: list,
+#                               step: int,
+#                               target_offset: float) -> bool:
+#        """
+#        Returns cached lane clearance boolean for given target offset and current step.
+#
+#        Args:
+#            ego (EgoState): Current state of the Ego vehicle.
+#            obstacles (list): List of dynamic obstacle objects.
+#            step (int): Current simulation time step index.
+#            target_offset (float): Target lateral lane offset (+ for left, - for right).
+#
+#        Returns:
+#            bool: True if blind spot is clear for target lane change, False otherwise.
+#        """
+#        
+#        cache = self.scan(ego, obstacles, step, target_offset=target_offset)
+#        return cache["target_clearance"][target_offset]
