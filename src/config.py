@@ -95,6 +95,7 @@ class UltrasonicConfig:
 class VehicleConfig:
     DEFAULT_WHEELBASE = 2.8
     DEFAULT_LENGTH = 4.5
+    DEFAULT_WIDTH = 1.8
     DEFAULT_VELOCITY = 15.0
 
 BP = BehaviorConfig()
