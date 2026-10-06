@@ -10,7 +10,14 @@ from src.ego_state import EgoState
 from src.sensor_suite import SensorSuite
 
 
-def plot_shapely_geometry(ax, geom, facecolor, edgecolor, alpha=0.22, zorder=70):
+def plot_shapely_geometry(
+        ax,
+        geom,
+        facecolor,
+        edgecolor,
+        alpha=0.22,
+        zorder=70
+    ):
     """Utility to render Shapely Polygons or MultiPolygons onto Matplotlib axes."""
     if geom is None or geom.is_empty:
         return
@@ -29,7 +36,8 @@ def plot_shapely_geometry(ax, geom, facecolor, edgecolor, alpha=0.22, zorder=70)
 def draw_obstacle_trajectories(
         ax,
         obstacles,
-        zorder=50):
+        zorder=50
+    ):
     """
     Draws predicted dotted trajectory paths for surrounding traffic obstacles.
 
@@ -74,7 +82,7 @@ def render_frame(
         num_steps,
         frame_path,
         show_trajectories: bool = False,
-        ):
+    ):
     """
     Renders simulation frame with Radar/USS FOV wedges, CBF safety buffer, and ego tracking camera.
 

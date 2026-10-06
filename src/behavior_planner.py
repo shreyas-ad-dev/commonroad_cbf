@@ -61,7 +61,12 @@ class BehaviorPlanner:
         self._cached_merge_hazard = None
         self._cached_selected_lead = None
 
-    def get_lead_track(self, ego: EgoState, sensor_suite: SensorSuite, lateral_margin: float = MAP.DEFAULT_LANE_WIDTH_METERS) -> Track | None:
+    def get_lead_track(
+            self,
+            ego: EgoState,
+            sensor_suite: SensorSuite,
+            lateral_margin: float = MAP.DEFAULT_LANE_WIDTH_METERS
+        ) -> Track | None:
         """Identifies the closest tracked lead vehicle in Ego's current corridor using tracked states."""
         tracks = sensor_suite.tracked_objects
         if not tracks:
@@ -79,9 +84,7 @@ class BehaviorPlanner:
 
             # Check if track is ahead in lane corridor
             if long_road > 0.0:
-                #v_lat = float(np.dot(track.velocity, n_road))
                 effective_lat_threshold = BP.MERGE_HAZARD_LAT_RANGE_METERS
-                #lateral_margin if abs(lat_road) < lateral_margin and np.sign(lat_road) != np.sign(v_lat) else 1.8
                 if abs(lat_road) <= effective_lat_threshold:
                     if long_road < closest_dist:
                         closest_dist = long_road
@@ -122,7 +125,12 @@ class BehaviorPlanner:
         self._cached_selected_lead = primary_lead
         return primary_lead
 
-    def get_merge_hazard_track(self, ego: EgoState, sensor_suite: SensorSuite, target_offset: float = 0.0) -> Track | None:
+    def get_merge_hazard_track(
+            self,
+            ego: EgoState,
+            sensor_suite: SensorSuite,
+            target_offset: float = 0.0
+        ) -> Track | None:
         """
         Scans tracked objects in both Ego's lane and target merging lane corridor.
         """
@@ -160,7 +168,7 @@ class BehaviorPlanner:
                     step: int,
                     sensor_suite:SensorSuite,
                     current_path,
-                    ):
+                ):
         """
         Updates high-level behavioral state and generates target reference trajectories.
 

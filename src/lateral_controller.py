@@ -7,10 +7,11 @@ from src.ego_state import EgoState
 
 
 def generate_lane_change_path(
-    ego: EgoState,
-    target_lane_offset: float = MAP.DEFAULT_LANE_WIDTH_METERS,
-    total_length: float = LATERAL.DEFAULT_PATH_LOOKAHEAD_DISTANCE,
-    num_points: int = LATERAL.DEFAULT_NUM_WAYPOINTS) -> np.ndarray:
+        ego: EgoState,
+        target_lane_offset: float = MAP.DEFAULT_LANE_WIDTH_METERS,
+        total_length: float = LATERAL.DEFAULT_PATH_LOOKAHEAD_DISTANCE,
+        num_points: int = LATERAL.DEFAULT_NUM_WAYPOINTS
+    ) -> np.ndarray:
     """
     Generates reference waypoints for a smooth lane change maneuver along any road heading.
 
@@ -50,11 +51,13 @@ class StanleyController:
     and heading error to compute saturated front-wheel steering commands.
     """
     
-    def __init__(self,
-                 k: float = STANLEY.DEFAULT_STANLEY_GAIN,
-                 k_soft: float = STANLEY.DEFAULT_SOFTENING_GAIN,
-                 max_steer_deg: float = STANLEY.DEFAULT_MAX_STEER_DEG,
-                 wheelbase: float = VEHICLE.DEFAULT_WHEELBASE):
+    def __init__(
+            self,
+            k: float = STANLEY.DEFAULT_STANLEY_GAIN,
+            k_soft: float = STANLEY.DEFAULT_SOFTENING_GAIN,
+            max_steer_deg: float = STANLEY.DEFAULT_MAX_STEER_DEG,
+            wheelbase: float = VEHICLE.DEFAULT_WHEELBASE
+        ):
         """
         Initializes the StanleyController instance.
 
@@ -73,9 +76,11 @@ class StanleyController:
         self.steering = 0
 
 
-    def compute_steering(self,
-                         ego: EgoState,
-                         reference_path: np.ndarray) -> float:
+    def compute_steering(
+            self,
+            ego: EgoState,
+            reference_path: np.ndarray
+        ) -> float:
         """
         Computes the front-axle Stanley steering command to track the target reference path.
 

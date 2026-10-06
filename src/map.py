@@ -19,7 +19,11 @@ class MapModule:
     for CommonRoad scenarios.
     """
 
-    def __init__(self, scenario: Any, planning_problem_set: Any | None = None):
+    def __init__(
+            self,
+            scenario: Any,
+            planning_problem_set: Any | None = None
+        ):
         """
         Initializes the MapModule with scenario and optional goal planning information.
 
@@ -31,7 +35,11 @@ class MapModule:
         self.planning_problem_set = planning_problem_set
         self.lanelet_network = scenario.lanelet_network
 
-    def get_distance_to_next_merge(self, ego: EgoState, horizon_meters: float = MAP.DEFAULT_LOOKAHEAD_HORIZON_METERS) -> float:
+    def get_distance_to_next_merge(
+            self,
+            ego: EgoState,
+            horizon_meters: float = MAP.DEFAULT_LOOKAHEAD_HORIZON_METERS
+        ) -> float:
         """
         Computes distance from ego's current position to the next upcoming lane merge.
         Detects both ego's lane merging into another lane and another lane merging into ego's lane.
@@ -91,7 +99,10 @@ class MapModule:
 
         return float('inf')
 
-    def get_road_heading_at_position(self, position: np.ndarray | list[float]) -> float | None:
+    def get_road_heading_at_position(
+            self,
+            position: np.ndarray | list[float]
+        ) -> float | None:
         """
         Computes the road heading angle from the centerline of the nearest lanelet.
 
@@ -131,7 +142,11 @@ class MapModule:
 
         return float(np.arctan2(dy, dx))
 
-    def get_current_lane_width(self, ego: EgoState, default_width: float = MAP.DEFAULT_LANE_WIDTH_METERS) -> float:
+    def get_current_lane_width(
+            self,
+            ego: EgoState,
+            default_width: float = MAP.DEFAULT_LANE_WIDTH_METERS
+        ) -> float:
         """
         Computes the local lane width surrounding the Ego vehicle's current position.
 
@@ -162,11 +177,11 @@ class MapModule:
         return float(np.mean(widths))
 
     def extract_target_lanelet_path(
-        self,
-        ego: EgoState,
-        horizon_meters: float = MAP.DEFAULT_EXTRACTION_HORIZON_METERS,
-        resampling_step: float = MAP.DEFAULT_RESAMPLING_STEP_METERS,
-    ) -> np.ndarray:
+            self,
+            ego: EgoState,
+            horizon_meters: float = MAP.DEFAULT_EXTRACTION_HORIZON_METERS,
+            resampling_step: float = MAP.DEFAULT_RESAMPLING_STEP_METERS
+        ) -> np.ndarray:
         """
         Extracts a sequence of lanelets connecting Ego to the goal using BFS,
         chaining centerlines and densely resampling waypoints.

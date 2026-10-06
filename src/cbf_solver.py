@@ -21,13 +21,15 @@ class CBFQPSolver:
     for safe acceleration commands that satisfy barrier function constraints.
     """
     
-    def __init__(self, 
-                 gamma: float = CBF.GAMMA, 
-                 d_min: float = CBF.SAFETY_DISTANCE_BUFFER_METERS, 
-                 tau: float = CBF.DEFAULT_HEADWAY_BUFFER_SEC, 
-                 a_min: float = CBF.MAX_BRAKING_ACCEL_MPS2, 
-                 a_max: float = CBF.DEFAULT_MAX_FORWARD_ACCEL_MPS2,
-                 use_cvxpy: bool = False):
+    def __init__(
+            self, 
+            gamma: float = CBF.GAMMA, 
+            d_min: float = CBF.SAFETY_DISTANCE_BUFFER_METERS, 
+            tau: float = CBF.DEFAULT_HEADWAY_BUFFER_SEC, 
+            a_min: float = CBF.MAX_BRAKING_ACCEL_MPS2, 
+            a_max: float = CBF.DEFAULT_MAX_FORWARD_ACCEL_MPS2,
+            use_cvxpy: bool = False
+        ):
         """
         Initializes the CBFQPSolver instance.
 
@@ -47,7 +49,11 @@ class CBFQPSolver:
         self.a_max = a_max
         self.use_cvxpy = use_cvxpy and CVXPY_AVAILABLE
 
-    def compute_barrier(self, longitudinal_dist: float, v_ego: float) -> float:
+    def compute_barrier(
+            self,
+            longitudinal_dist: float,
+            v_ego: float
+        ) -> float:
         """
         Computes the CBF barrier value h(x) based on relative longitudinal distance.
 
@@ -62,11 +68,13 @@ class CBFQPSolver:
         d_safe = self.d_min + (v_ego * self.tau)
         return longitudinal_dist - d_safe
 
-    def solve_from_track(self,
-                         ego: EgoState,
-                         lead_track: Track,
-                         v_des: float,
-                         dt: float) -> float:
+    def solve_from_track(
+            self,
+            ego: EgoState,
+            lead_track: Track,
+            v_des: float,
+            dt: float
+        ) -> float:
         """
         Convenience wrapper to solve CBF-QP directly from a filtered Track object.
         """
@@ -90,12 +98,14 @@ class CBFQPSolver:
             dt=dt
         )
 
-    def solve(self, 
-              longitudinal_dist: float, 
-              v_ego: float, 
-              v_target: float, 
-              v_des: float, 
-              dt: float) -> float:
+    def solve(
+            self, 
+            longitudinal_dist: float, 
+            v_ego: float, 
+            v_target: float, 
+            v_des: float, 
+            dt: float
+        ) -> float:
         """
         Solves for the optimal safe acceleration command (u) enforcing h(x) >= 0.
 
@@ -118,11 +128,13 @@ class CBFQPSolver:
         else:
             return self._solve_analytical(h_val, v_ego, v_target, u_nom)
 
-    def _solve_analytical(self,
-                          h_val: float,
-                          v_ego: float,
-                          v_target: float,
-                          u_nom: float) -> float:
+    def _solve_analytical(
+            self,
+            h_val: float,
+            v_ego: float,
+            v_target: float,
+            u_nom: float
+        ) -> float:
         """
         Computes the closed-form analytical solution to the scalar CBF-QP.
 
@@ -149,13 +161,15 @@ class CBFQPSolver:
         u_cbf = min(u_nom, max_allowed_accel)
         return float(np.clip(u_cbf, self.a_min, self.a_max))
 
-    def _solve_cvxpy(self,
-                     longitudinal_dist: float,
-                     v_ego: float,
-                     v_target: float,
-                     v_des: float,
-                     dt: float,
-                     h_current: float) -> float:
+    def _solve_cvxpy(
+            self,
+            longitudinal_dist: float,
+            v_ego: float,
+            v_target: float,
+            v_des: float,
+            dt: float,
+            h_current: float
+        ) -> float:
         """
         Solves the discrete-time CBF-QP using explicit CVXPY optimization.
 

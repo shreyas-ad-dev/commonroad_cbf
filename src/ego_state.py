@@ -186,11 +186,12 @@ class EgoState:
     # -------------------------------------------------------------------------
     # Kinematic Integration
     # -------------------------------------------------------------------------
-    def update_kinematics(self, 
-                          accel: float, 
-                          steering_angle: float = 0.0, 
-                          dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC 
-                          ) -> None:
+    def update_kinematics(
+            self, 
+            accel: float, 
+            steering_angle: float = 0.0, 
+            dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC 
+        ) -> None:
         """
         Integrates vehicle state forward in time using a Kinematic Bicycle Model.
 

@@ -32,9 +32,11 @@ class BaseSensor:
         half_fov_rad (float): Half of the field-of-view angle in radians.
     """
 
-    def __init__(self,
-                 range_max: float,
-                 fov_deg: float):
+    def __init__(
+            self,
+            range_max: float,
+            fov_deg: float
+        ):
         """
         Initializes the base sensor parameters.
 
@@ -70,10 +72,12 @@ class BaseSensor:
         y_local = np.dot(d_vec, ego.normal_vector)
         return np.array([x_local, y_local])
 
-    def get_obstacle_center_and_corners_in_local(self,
-                                       ego: EgoState,
-                                       obstacle: object,
-                                       step: int) -> tuple[np.ndarray, list[np.ndarray]] | None:
+    def get_obstacle_center_and_corners_in_local(
+            self,
+            ego: EgoState,
+            obstacle: object,
+            step: int
+        ) -> tuple[np.ndarray, list[np.ndarray]] | None:
         """Extracts the local center and corner points of an obstacle.
 
         Computes the center position and four bounding box corners of an 

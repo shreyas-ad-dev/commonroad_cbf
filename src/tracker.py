@@ -32,7 +32,11 @@ class KalmanFilter2D:
     State vector x: [px, py, vx, vy]^T
     Measurement vector z: [px, py]^T
     """
-    def __init__(self, init_pos: np.ndarray, dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC):
+    def __init__(
+            self,
+            init_pos: np.ndarray,
+            dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC
+        ):
         self.dt = dt
 
         # Initial state estimate [px, py, vx, vy]
@@ -76,7 +80,11 @@ class KalmanFilter2D:
         self.P = self.F @ self.P @ self.F.T + self.Q
         return self.x
 
-    def update(self, z: np.ndarray, R: np.ndarray) -> np.ndarray:
+    def update(
+            self,
+            z: np.ndarray,
+            R: np.ndarray
+        ) -> np.ndarray:
         """Update state estimate with incoming measurement."""
         y = z - (self.H @ self.x)  # Measurement residual
         S = self.H @ self.P @ self.H.T + R  # Residual covariance
@@ -92,13 +100,13 @@ class Track:
     """Maintains individual object track lifecycle and state filter."""
 
     def __init__(
-        self,
-        track_id: int,
-        detection: Detection,
-        dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC,
-        confirm_hits: int = TRACK.MIN_HITS_TO_CONFIRM,
-        max_age: int = TRACK.MAX_MISSED_DETECTIONS 
-    ):
+            self,
+            track_id: int,
+            detection: Detection,
+            dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC,
+            confirm_hits: int = TRACK.MIN_HITS_TO_CONFIRM,
+            max_age: int = TRACK.MAX_MISSED_DETECTIONS 
+        ):
         self.track_id = track_id
         self.state = TrackState.TENTATIVE
         self.kf = KalmanFilter2D(init_pos=detection.z[:2], dt=dt)
@@ -127,7 +135,10 @@ class Track:
         self.time_since_update += 1
         return self.kf.predict()
 
-    def update(self, detection: Detection):
+    def update(
+            self,
+            detection: Detection
+        ):
         """Incorporate a new measurement into the track."""
         self.hits += 1
         self.time_since_update = 0

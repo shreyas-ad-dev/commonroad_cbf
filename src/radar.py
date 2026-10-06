@@ -26,12 +26,14 @@ class RadarSensor(BaseSensor):
         fov_deg (float): Total azimuth field of view in degrees.
         """
 
-    def __init__(self,
-                 range_max: float = RADAR.DEFAULT_RADAR_MAX_RANGE,
-                 fov_deg: float = RADAR.DEFAULT_RADAR_FOV_DEG,
-                 mount_position: str = "front",
-                 noise_std: float = RADAR.DEFAULT_RADAR_RANGE_NOISE_STD,
-                 ray_count: int = 40):
+    def __init__(
+            self,
+            range_max: float = RADAR.DEFAULT_RADAR_MAX_RANGE,
+            fov_deg: float = RADAR.DEFAULT_RADAR_FOV_DEG,
+            mount_position: str = "front",
+            noise_std: float = RADAR.DEFAULT_RADAR_RANGE_NOISE_STD,
+            ray_count: int = 40
+        ):
         """
         Initializes the RadarSensor instance.
 
@@ -65,9 +67,10 @@ class RadarSensor(BaseSensor):
             "visible_fov": None
         }
 
-    def _get_sensor_transform(self,
-                              ego: EgoState
-                              ) -> (np.ndarray, float):
+    def _get_sensor_transform(
+            self,
+            ego: EgoState
+        ) -> (np.ndarray, float):
 
         if self.mount_position == "front":
             offset = (ego.length / 2.0)
@@ -80,10 +83,11 @@ class RadarSensor(BaseSensor):
         
         return sensor_pos, sensor_heading_deg
     
-    def _build_fov_wedge(self,
-                         sensor_pos: np.ndarray,
-                         sensor_heading_deg: float
-                         ) -> ShapelyPolygon:
+    def _build_fov_wedge(
+            self,
+            sensor_pos: np.ndarray,
+            sensor_heading_deg: float
+        ) -> ShapelyPolygon:
 
         t1 = sensor_heading_deg - (self.fov_deg / 2.0)
         t2 = sensor_heading_deg + (self.fov_deg / 2.0)
@@ -94,10 +98,11 @@ class RadarSensor(BaseSensor):
                 ]
         return ShapelyPolygon([tuple(sensor_pos)] + arc_pts + [tuple(sensor_pos)])
 
-    def _compute_occlusion_shadow(self,
-                                  sensor_pos: np.ndarray,
-                                  obs_poly: ShapelyPolygon
-                                  ) -> ShapelyPolygon | None:
+    def _compute_occlusion_shadow(
+            self,
+            sensor_pos: np.ndarray,
+            obs_poly: ShapelyPolygon
+        ) -> ShapelyPolygon | None:
 
         pts = np.array(obs_poly.exterior.coords)[:-1]
         if len(pts) == 0:
@@ -122,11 +127,12 @@ class RadarSensor(BaseSensor):
         return ShapelyPolygon([p1, p2, p2_proj, p1_proj])
 
 
-    def scan(self,
-             ego: EgoState,
-             obstacles: list,
-             step: int
-             ) -> dict[str, Any]:
+    def scan(
+            self,
+            ego: EgoState,
+            obstacles: list,
+            step: int
+        ) -> dict[str, Any]:
         """
         Executes single-pass FOV perception evaluations and updates step cache.
 
@@ -274,148 +280,12 @@ class RadarSensor(BaseSensor):
 
         return self._scan_cache
 
-    def get_detections(self,
-                       ego: EgoState,
-                       obstacles: list,
-                       step: int
-                       ) -> list[Detection]:
+    def get_detections(
+            self,
+            ego: EgoState,
+            obstacles: list,
+            step: int
+        ) -> list[Detection]:
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
 
-#    def get_detected_obstacle_ids(self,
-#                                  ego: EgoState,
-#                                  obstacles: list,
-#                                  step: int) -> set[int]:
-#        """
-#        Gets cached set of obstacle IDs that fall within this radar's FOV at the given step.
-#
-#        Args:
-#            ego (EgoState): Current state of the Ego vehicle.
-#            obstacles (list): List of dynamic obstacle objects.
-#            step (int): Current simulation time step index.
-#
-#        Returns:
-#            set[int]: Set of detected obstacle unique identifiers.
-#        """
-#
-#        return self.scan(ego, obstacles, step)["detected_ids"]
-
-   # def track_lead_vehicle(self,
-   #                        ego: EgoState,
-   #                        obstacles: list,
-   #                        step: int,
-   #                        lane_corridor_width: float = MAP.DEFAULT_LANE_WIDTH_METERS, # was set to 2.5 earlier
-   #                        target_offset: float = 0.0,
-   #                        ) -> tuple[float, float, float, int, float] | None:
-   #     """
-   #     Scans vehicles in Ego's FOV cone and tracks the closest lead target.
-
-   #     Uses cached FOV evaluation results to eliminate redundant coordinate 
-   #     transformations and projects obstacles onto the road corridor.
-
-   #     Args:
-   #         ego (EgoState): Current state of the Ego vehicle.
-   #         obstacles (list): List of dynamic obstacle objects.
-   #         step (int): Current simulation time step index.
-   #         lane_corridor_width (float, optional): Corridor width for lead vehicle filtering in meters. Defaults to 2.5.
-   #         target_offset (float, optional): Lateral lane offset in meters (+ for left, - for right). Defaults to 0.0.
-
-   #     Returns:
-   #         tuple[float, float, float, int, float] | None: A tuple containing 
-   #             (x_world, y_world, velocity, obstacle_id, bumper_to_bumper_x_local), 
-   #             or None if no lead vehicle is detected.
-   #     """
-
-   #     if self.mount_position != "front":
-   #         return None
-
-   #     scan_res = self.scan(ego, obstacles, step)
-   #     closest_dist = self.range_max
-   #     lead_target = None
-   #     half_corridor = lane_corridor_width / 2.0
-   #     u_road, n_road = ego.road_frame_vectors
-
-   #     for obs in obstacles:
-   #         st = obs.state_at_time(step)
-   #         if st is None or obs.obstacle_id not in scan_res["fov_data"]:
-   #             continue
-
-   #         occ_data = scan_res["fov_data"][obs.obstacle_id]
-   #         if not occ_data.in_fov:
-   #             continue
-
-   #         # Road-aligned corridor projection using center position
-   #         d_vec = st.position - ego.position
-   #         long_road = np.dot(d_vec, u_road)
-   #         lat_road = np.dot(d_vec, n_road)
-
-   #         if long_road > 0.0:  # Vehicle must be ahead along the road
-   #             in_corridor = abs(lat_road - target_offset) <= half_corridor
-
-   #             if in_corridor and (occ_data.min_dist < closest_dist):
-   #                 closest_dist = occ_data.min_dist
-   #                 target_v = float(getattr(st, 'velocity', VEHICLE.DEFAULT_VELOCITY))
-   #                 # Calculate bumper-to-bumper longitudinal distance offset
-   #                 obs_length = getattr(obs.obstacle_shape, 'length', VEHICLE.DEFAULT_LENGTH)
-   #                 ego_length = ego.length
-   #                 bumper_x_local = max(0.1, occ_data.center_x_local - (obs_length / 2.0) - (ego_length / 2.0))
-
-   #                 lead_target = (st.position[0], st.position[1], target_v, obs.obstacle_id, bumper_x_local)
-   #     return lead_target
-
-#    def is_adjacent_lane_clear(self,
-#                               ego: EgoState,
-#                               surrounding_obstacles: list,
-#                               step: int,
-#                               target_lane_offset: float,
-#                               safety_gap_front: float = RADAR.LANE_CHANGE_SAFETY_GAP_FRONT,
-#                               safety_gap_rear: float = RADAR.LANE_CHANGE_SAFETY_GAP_REAR,
-#                               rear_radar: "RadarSensor | None" = None,
-#                               lane_tolerance: float = MAP.DEFAULT_LANE_WIDTH_METERS/2) -> bool:
-#        """
-#        Evaluates whether an adjacent lane target gap is clear using front and rear radars.
-#
-#        Args:
-#            ego (EgoState): Current state of the Ego vehicle.
-#            surrounding_obstacles (list): List of dynamic obstacles in the scene.
-#            step (int): Current simulation time step index.
-#            target_lane_offset (float): Target lane offset in meters (+ for left, - for right).
-#            safety_gap_front (float, optional): Required clearance ahead in target lane. Defaults to 12.0.
-#            safety_gap_rear (float, optional): Required clearance behind in target lane. Defaults to 10.0.
-#            rear_radar (RadarSensor | None, optional): Optional rear radar instance for rear scanning. Defaults to None.
-#            lane_tolerance (float, optional): Half-width tolerance for target lane check. Defaults to 1.8.
-#
-#        Returns:
-#            bool: True if target lane gap is completely clear of obstacles, False otherwise.
-#        """
-#        u_hat, n_hat = ego.road_frame_vectors
-#
-#        front_scan = self.scan(ego, surrounding_obstacles, step)
-#        rear_scan = rear_radar.scan(ego, surrounding_obstacles, step) if rear_radar is not None else None
-#
-#        for obs in surrounding_obstacles:
-#            st = obs.state_at_time(step)
-#            if st is None:
-#                continue
-#
-#            obs_id = obs.obstacle_id
-#            front_occ = front_scan["fov_data"].get(obs_id)
-#            rear_occ = rear_scan["fov_data"].get(obs_id) if rear_scan else None
-#
-#            in_front_fov = front_occ.in_fov if front_occ else False
-#            in_rear_fov = rear_occ.in_fov if rear_occ else False
-#
-#            if not (in_front_fov or in_rear_fov):
-#                continue
-#
-#            d_vec = st.position - ego.position
-#            longitudinal_dist = np.dot(d_vec, u_hat)
-#            lateral_dist = np.dot(d_vec, n_hat)
-#
-#            is_in_target_lane = abs(lateral_dist - target_lane_offset) <= lane_tolerance
-#            is_in_safety_window = -safety_gap_rear <= longitudinal_dist <= safety_gap_front
-#            
-#            if is_in_target_lane and is_in_safety_window:
-#                return False
-#
-#        return True
