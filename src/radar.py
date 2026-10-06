@@ -8,7 +8,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
 from src.base_sensor import BaseSensor, SensorOcclusionData
-from src.config import MAP, RADAR, VEHICLE, TEST
+from src.config import RADAR, TEST, VEHICLE
 from src.ego_state import EgoState, get_car_polygon
 from src.tracker import Detection
 

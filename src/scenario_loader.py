@@ -7,6 +7,7 @@ from commonroad.common.file_reader import CommonRoadFileReader
 
 from src.config import SCENARIO, VEHICLE
 
+
 def load_scenario_and_ego(xml_path: Path):
     """
     Loads a CommonRoad scenario XML and parses Ego vehicle and obstacle data.

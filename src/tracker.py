@@ -5,7 +5,8 @@ from enum import Enum, auto
 
 import numpy as np
 
-from src.config import KALMAN, TEST, TRACK 
+from src.config import KALMAN, TEST, TRACK
+
 
 class TrackState(Enum):
     TENTATIVE = auto()

@@ -2,8 +2,9 @@
 
 import numpy as np
 
-from src.ego_state import EgoState
 from src.config import LATERAL, MAP, STANLEY, VEHICLE
+from src.ego_state import EgoState
+
 
 def generate_lane_change_path(
     ego: EgoState,

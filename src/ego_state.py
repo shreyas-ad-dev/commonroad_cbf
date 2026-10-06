@@ -7,6 +7,7 @@ from shapely.geometry import Polygon
 
 from src.config import EGO, TEST
 
+
 def get_car_polygon(
         x: float, 
         y: float, 

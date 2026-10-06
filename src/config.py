@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class BehaviorConfig:
     LANE_MERGE_LOOKAHED_DISTANCE_METERS = 25.0
@@ -22,7 +23,6 @@ class CBFConfig:
     MAX_BRAKING_ACCEL_MPS2 = -8.0
     DEFAULT_MAX_FORWARD_ACCEL_MPS2 = 2.0
 
-
 @dataclass(frozen=True)
 class DataAssociationConfig:
     GATING_PENALTY_COST = 1e5 
@@ -30,7 +30,7 @@ class DataAssociationConfig:
     MAX_ASSIGNMENT_DISTANCE = 5.0
 
 @dataclass(frozen=True)
-class EgoConfig():
+class EgoConfig:
     STEERING_MIN_SENSITIVITY = 1e-6
 
 @dataclass(frozen=True)
@@ -72,7 +72,6 @@ class SensorSuiteConfig:
     DEFAULT_MAX_PERCEPTIONT_RADIUS = 85.0
     LANE_CHANGE_SAFETY_GAP_FRONT = 12.0
     LANE_CHANGE_SAFETY_GAP_REAR = 10.0
-
 
 @dataclass(frozen=True)
 class StanleyConfig:

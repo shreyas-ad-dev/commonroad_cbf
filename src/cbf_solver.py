@@ -71,7 +71,7 @@ class CBFQPSolver:
         Convenience wrapper to solve CBF-QP directly from a filtered Track object.
         """
         if lead_track is None:
-            # No lead vehicle tracked, apply nominal acceleration towards target speed[cite: 12]
+            # No lead vehicle tracked, apply nominal acceleration towards target speed
             u_nom = 0.5 * (v_des - ego.velocity)
             return float(np.clip(u_nom, self.a_min, self.a_max))
 
@@ -79,7 +79,7 @@ class CBFQPSolver:
         d_vec = lead_track.position - ego.position
         longitudinal_dist = float(np.dot(d_vec, u_road))
 
-        # Filtered target velocity magnitude from track state vector[cite: 10]
+        # Filtered target velocity magnitude from track state vector
         v_target = float(np.hypot(lead_track.velocity[0], lead_track.velocity[1]))
 
         return self.solve(
