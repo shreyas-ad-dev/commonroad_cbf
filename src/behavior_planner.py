@@ -26,11 +26,13 @@ class BehaviorPlanner:
         lane_change_start_pos (np.ndarray | None): Ego position when lane change was initiated.
     """
 
-    def __init__(self,
-                 map_module = MapModule,
-                 mode: str = "GAP_SEARCH",
-                 target_offset: float = 0.0,
-                 start_distance: float = 0.0):
+    def __init__(
+            self,
+            map_module = MapModule,
+            mode: str = "GAP_SEARCH",
+            target_offset: float = 0.0,
+            start_distance: float = 0.0
+        ):
         """
         Initializes the BehaviorPlanner instance.
 

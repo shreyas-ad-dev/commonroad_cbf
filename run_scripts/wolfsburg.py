@@ -7,6 +7,7 @@ sys.path.append(str(PROJECT_ROOT))
 import numpy as np
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.config import VEHICLE
 from src.datalogger import DataLogger
 from src.ego_state import EgoState, get_car_polygon
 from src.lateral_controller import StanleyController
@@ -46,7 +47,7 @@ ego = EgoState(
     velocity=DESIRED_SPEED,
     length=ego_params["length"],
     width=ego_params["width"],
-    wheelbase=ego_params.get("wheelbase", 2.8),
+    wheelbase=ego_params.get("wheelbase", VEHICLE.DEFAULT_WHEELBASE),
 )
 
 print(f" Loaded Scenario: {scenario.scenario_id}")
@@ -139,8 +140,8 @@ for step in range(NUM_STEPS):
             ox, oy = st.position[0], st.position[1]
             o_orient = getattr(st, "orientation", 0.0)
 
-        l = getattr(obs.obstacle_shape, "length", 4.5)
-        w = getattr(obs.obstacle_shape, "width", 2.0)
+        l = getattr(obs.obstacle_shape, "length", VEHICLE.DEFAULT_LENGTH)
+        w = getattr(obs.obstacle_shape, "width", VEHICLE.DEFAULT_WIDTH)
         obs_poly, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
 
         if not has_collided and ego.polygon.intersects(obs_poly):
