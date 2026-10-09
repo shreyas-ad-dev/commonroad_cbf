@@ -48,6 +48,8 @@ class CBFQPSolver:
         self.a_min = a_min
         self.a_max = a_max
         self.use_cvxpy = use_cvxpy and CVXPY_AVAILABLE
+        self._cached_h_val = 0.0
+        self._cached_a_req = 0.0
 
     def compute_barrier(
             self,
@@ -66,7 +68,8 @@ class CBFQPSolver:
         """
         
         d_safe = self.d_min + (v_ego * self.tau)
-        return longitudinal_dist - d_safe
+        self._cached_h_val = longitudinal_dist - d_safe
+        return self._cached_h_val
 
     def solve_from_track(
             self,
@@ -90,13 +93,15 @@ class CBFQPSolver:
         # Filtered target velocity magnitude from track state vector
         v_target = float(np.hypot(lead_track.velocity[0], lead_track.velocity[1]))
 
-        return self.solve(
+        self._cached_a_req = self.solve(
             longitudinal_dist=longitudinal_dist,
             v_ego=ego.velocity,
             v_target=v_target,
             v_des=v_des,
             dt=dt
         )
+
+        return self._cached_a_req
 
     def solve(
             self, 
@@ -211,6 +216,8 @@ class CBFQPSolver:
 
     def get_log_data(self) -> dict:
         return {
+                "h_val": self._cached_h_val,
+                "a_req":self._cached_a_req,
                 "gamma": self.gamma,
                 "d_min": self.d_min,
                 "tau": self.tau,
