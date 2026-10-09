@@ -80,7 +80,7 @@ sensor_suite = SensorSuite(
         dt=scenario.dt
         )
 
-cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0)
+cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0, use_cvxpy=True)
 stanley_ctrl = StanleyController(k=0.7, k_soft=1.0)
 
 lane_width = map_module.get_current_lane_width(ego=ego)
