@@ -291,3 +291,13 @@ class SideUltrasonicSensor(BaseSensor):
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
     
+    def serialize(self):
+        return {
+                "sensor_id": self.sensor_id,
+                "position" : self.side,
+                "range" : self.range_max,
+                "fov_deg": self.fov_deg,
+                "noise_std": self.noise_std,
+                "R": self.R
+                }
+

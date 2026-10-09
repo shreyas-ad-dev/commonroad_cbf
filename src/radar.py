@@ -289,3 +289,13 @@ class RadarSensor(BaseSensor):
         """Gets cached list of Detection objects for MOT tracking pipeline."""
         return self.scan(ego, obstacles, step)["detections"]
 
+    def serialize(self):
+        return {
+                "sensor_id": self.sensor_id,
+                "position": self.mount_position,
+                "range": self.range_max,
+                "fov_deg": self.fov_deg,
+                "noise_std": self.noise_std,
+                "R": self.R
+                }
+
