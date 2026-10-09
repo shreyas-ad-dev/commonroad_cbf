@@ -271,6 +271,10 @@ class SensorSuite:
 
     def get_log_data(self) -> dict:
         return{
+                "front_radar" : self.front_radar.serialize(),
+                "reear_radar" : self.rear_radar.serialize(),
+                "left_uss": self.uss_left.serialize(),
+                "right_uss": self.uss_right.serialize(),
                 "active_tracks":[track.serialize() for track in self.tracker.active_tracks],
                 "confirmed_tracks": [track.serialize() for track in self.tracker.confirmed_tracks],
             }
