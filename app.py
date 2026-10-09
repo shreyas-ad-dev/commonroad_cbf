@@ -17,6 +17,27 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# CSS to ensure the slider container fills available width without padding
+st.markdown("""
+    <style>
+    div[data-testid="stSlider"] {
+        padding-left: 0px !important;
+        padding-right: 0px !important;
+    }
+    div[data-baseweb="slider"] {
+        margin-left: 0px !important;
+        margin-right: 0px !important;
+        padding-left: 0px !important;
+        padding-right: 0px !important;
+    }
+    .stButton button {
+        height: 38px;
+        line-height: 1;
+        padding: 0 8px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("🚦 Autonomous Driving Data Logger & Frame Visualizer")
 
 # -----------------------------------------------------------------------------
@@ -64,219 +85,330 @@ def load_jsonl_log(jsonl_path: str):
 def get_gif_frame(gif_path: str, frame_index: int) -> Image.Image:
     """Extracts a specific static frame image from an animated GIF."""
     img = Image.open(gif_path)
-    
-    # Handle wrap-around or clamp if GIF total frames differ from JSONL log length
     num_frames = getattr(img, "n_frames", 1)
     target_frame = frame_index % num_frames if num_frames > 0 else 0
-    
     img.seek(target_frame)
     return img.convert("RGB")
 
 # -----------------------------------------------------------------------------
 # Sidebar Configuration
 # -----------------------------------------------------------------------------
-#st.sidebar.header("📁 File & Settings Config")
-
-#default_jsonl = "log_zam32.jsonl"
-#default_frames_dir = "frames_zam32"
-#default_gif = "zam_zip32_v2_merge.gif"
-
-#jsonl_file = st.sidebar.text_input("JSONL Path:", value=default_jsonl)
-#frames_dir = st.sidebar.text_input("Frames Directory:", value=default_frames_dir)
-#gif_file = st.sidebar.text_input("GIF Path (Optional):", value=default_gif)
-
-#if not Path(jsonl_file).exists():
-#    st.error(f"Cannot find log file: {jsonl_file}. Please check the path.")
-#    st.stop()
-# Scan root directory for files
 root_dir = Path(".")
 json_files = sorted([p.name for p in root_dir.glob("*.json*")])
 gif_files = sorted([p.name for p in root_dir.glob("*.gif")])
 
+st.sidebar.header("⚙️ Mode Setup")
+compare_runs = st.sidebar.checkbox("Compare Runs", value=False)
+
+if compare_runs:
+    st.sidebar.checkbox("Separate Control", value=False, key="separate_control_active")
+
+
+st.sidebar.markdown("---")
 st.sidebar.header("📁 File & Settings Config")
 
-# JSON / JSONL Dropdown
+default_json_idx1 = json_files.index("log_zam32.jsonl") if "log_zam32.jsonl" in json_files else 0
+default_gif_idx1 = gif_files.index("zam_zip32_v2_merge.gif") if "zam_zip32_v2_merge.gif" in gif_files else 0
+
+if compare_runs:
+    st.sidebar.subheader("Run 1 Config")
+
 if json_files:
-    default_json_idx = json_files.index("log_zam32.jsonl") if "log_zam32.jsonl" in json_files else 0
-    jsonl_file = st.sidebar.selectbox("Select JSON/JSONL Log:", options=json_files, index=default_json_idx)
+    jsonl_file1 = st.sidebar.selectbox("Select JSON/JSONL Log (Run 1):", options=json_files, index=default_json_idx1, key="json1")
 else:
-    jsonl_file = st.sidebar.text_input("JSONL Path:", value="log_zam32.jsonl")
+    jsonl_file1 = st.sidebar.text_input("JSONL Path (Run 1):", value="log_zam32.jsonl", key="json1_txt")
 
-# GIF Dropdown
 if gif_files:
-    default_gif_idx = gif_files.index("zam_zip32_v2_merge.gif") if "zam_zip32_v2_merge.gif" in gif_files else 0
-    gif_file = st.sidebar.selectbox("Select GIF File:", options=gif_files, index=default_gif_idx)
+    gif_file1 = st.sidebar.selectbox("Select GIF File (Run 1):", options=gif_files, index=default_gif_idx1, key="gif1")
 else:
-    gif_file = st.sidebar.text_input("GIF Path:", value="zam_zip32_v2_merge.gif")
+    gif_file1 = st.sidebar.text_input("GIF Path (Run 1):", value="zam_zip32_v2_merge.gif", key="gif1_txt")
 
-df = load_jsonl_log(jsonl_file)
-total_steps = len(df)
+df1 = load_jsonl_log(jsonl_file1)
+total_steps1 = len(df1)
 
+df2 = None
+total_steps2 = 0
+gif_file2 = None
+
+if compare_runs:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Run 2 Config")
+    
+    default_json_idx2 = (default_json_idx1 + 1) if len(json_files) > 1 else default_json_idx1
+    default_gif_idx2 = (default_gif_idx1 + 1) if len(gif_files) > 1 else default_gif_idx1
+
+    if json_files:
+        jsonl_file2 = st.sidebar.selectbox("Select JSON/JSONL Log (Run 2):", options=json_files, index=default_json_idx2, key="json2")
+    else:
+        jsonl_file2 = st.sidebar.text_input("JSONL Path (Run 2):", value="log_zam32.jsonl", key="json2_txt")
+
+    if gif_files:
+        gif_file2 = st.sidebar.selectbox("Select GIF File (Run 2):", options=gif_files, index=default_gif_idx2, key="gif2")
+    else:
+        gif_file2 = st.sidebar.text_input("GIF Path (Run 2):", value="zam_zip32_v2_merge.gif", key="gif2_txt")
+
+    df2 = load_jsonl_log(jsonl_file2)
+    total_steps2 = len(df2)
+
+# Signal Selection
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Signal Selection")
 
-numeric_cols = [
-    col for col in df.columns 
-    if col not in ["step", "timestamp"] and pd.api.types.is_numeric_dtype(df[col])
+numeric_cols1 = [
+    col for col in df1.columns 
+    if col not in ["step", "timestamp"] and pd.api.types.is_numeric_dtype(df1[col])
 ]
 
+if df2 is not None:
+    numeric_cols2 = [
+        col for col in df2.columns 
+        if col not in ["step", "timestamp"] and pd.api.types.is_numeric_dtype(df2[col])
+    ]
+    available_signals = sorted(list(set(numeric_cols1).union(set(numeric_cols2))))
+else:
+    available_signals = numeric_cols1
+
 default_selected = [
-    col for col in numeric_cols 
+    col for col in available_signals 
     if any(k in col for k in ["ego.velocity", "steering.steering", "ego.orientation_deg"])
 ]
 
 selected_signals = st.sidebar.multiselect(
     "Select signals to plot:",
-    options=numeric_cols,
-    default=default_selected if default_selected else numeric_cols[:2]
+    options=available_signals,
+    default=default_selected if default_selected else available_signals[:2]
 )
+
+# Session state initialization
+if "current_step1" not in st.session_state:
+    st.session_state.current_step1 = 0
+if "current_step2" not in st.session_state:
+    st.session_state.current_step2 = 0
+if "sync_step" not in st.session_state:
+    st.session_state.sync_step = 0
+
+max_total_steps = max(total_steps1, total_steps2) if compare_runs else total_steps1
+
+# Callback Functions that directly modify slider keys
+def increment_step1():
+    if st.session_state.current_step1 < total_steps1 - 1:
+        st.session_state.current_step1 += 1
+
+def decrement_step1():
+    if st.session_state.current_step1 > 0:
+        st.session_state.current_step1 -= 1
+
+def increment_step2():
+    if st.session_state.current_step2 < total_steps2 - 1:
+        st.session_state.current_step2 += 1
+
+def decrement_step2():
+    if st.session_state.current_step2 > 0:
+        st.session_state.current_step2 -= 1
+
+def increment_both():
+    if st.session_state.sync_step < max_total_steps - 1:
+        st.session_state.sync_step += 1
+        st.session_state.current_step1 = min(st.session_state.sync_step, total_steps1 - 1)
+        if compare_runs:
+            st.session_state.current_step2 = min(st.session_state.sync_step, total_steps2 - 1)
+
+def decrement_both():
+    if st.session_state.sync_step > 0:
+        st.session_state.sync_step -= 1
+        st.session_state.current_step1 = min(st.session_state.sync_step, total_steps1 - 1)
+        if compare_runs:
+            st.session_state.current_step2 = min(st.session_state.sync_step, total_steps2 - 1)
+
+def on_sync_slider_change():
+    val = st.session_state.sync_step
+    st.session_state.current_step1 = min(val, total_steps1 - 1)
+    if compare_runs:
+        st.session_state.current_step2 = min(val, total_steps2 - 1)
+
 # -----------------------------------------------------------------------------
-# Frame Control Interface (Fixed Callback Logic)
+# 1. Real-Time Signal Plot (Placed at Top)
 # -----------------------------------------------------------------------------
-st.subheader("🕹️ Simulation Playback Controls")
+st.subheader("📈 Real-time Signal Plots")
 
-if "current_step" not in st.session_state:
-    st.session_state.current_step = 0
+current_step1 = min(st.session_state.current_step1, total_steps1 - 1)
+step_row1 = df1[df1["step"] == current_step1].iloc[0]
 
-# Callbacks to update state prior to rendering widgets
-def increment_step():
-    if st.session_state.current_step < total_steps - 1:
-        st.session_state.current_step += 1
+if compare_runs:
+    current_step2 = min(st.session_state.current_step2, total_steps2 - 1)
+    step_row2 = df2[df2["step"] == current_step2].iloc[0]
+else:
+    current_step2 = current_step1
+    step_row2 = step_row1
 
-def decrement_step():
-    if st.session_state.current_step > 0:
-        st.session_state.current_step -= 1
+if selected_signals:
+    fig = go.Figure()
+    
+    for sig in selected_signals:
+        if sig in df1.columns:
+            fig.add_trace(go.Scatter(
+                x=df1["step"],
+                y=df1[sig],
+                mode="lines",
+                name=f"{sig} (Run 1)",
+                opacity=0.8
+            ))
+            fig.add_trace(go.Scatter(
+                x=[current_step1],
+                y=[step_row1[sig]],
+                mode="markers",
+                marker=dict(size=10, symbol="circle"),
+                name=f"{sig} (Run 1 Current)",
+                showlegend=False
+            ))
 
-col_prev, col_step, col_next = st.columns([1, 4, 1])
+        if compare_runs and df2 is not None and sig in df2.columns:
+            fig.add_trace(go.Scatter(
+                x=df2["step"],
+                y=df2[sig],
+                mode="lines",
+                line=dict(dash="dash"),
+                name=f"{sig} (Run 2)",
+                opacity=0.8
+            ))
+            fig.add_trace(go.Scatter(
+                x=[current_step2],
+                y=[step_row2[sig]],
+                mode="markers",
+                marker=dict(size=10, symbol="x"),
+                name=f"{sig} (Run 2 Current)",
+                showlegend=False
+            ))
 
-with col_prev:
-    st.button("⬅️ Previous Step", on_click=decrement_step)
+    fig.add_vline(x=current_step1, line_width=2, line_dash="dash", line_color="red", annotation_text="Run 1")
+    if compare_runs:
+        fig.add_vline(x=current_step2, line_width=2, line_dash="dot", line_color="blue", annotation_text="Run 2")
 
-with col_next:
-    st.button("Next Step ➡️", on_click=increment_step)
-
-with col_step:
-    st.slider(
-        "Step / Frame Index",
-        min_value=0,
-        max_value=total_steps - 1,
-        key="current_step"  # Binding directly to session_state key
+    fig.update_layout(
+        xaxis=dict(
+            title="Step",
+            range=[0, max_total_steps - 1],
+            autorange=False,
+            fixedrange=True,
+            showgrid=True,
+            zeroline=False
+        ),
+        yaxis_title="Value",
+        legend=dict(
+            orientation="h",
+            x=0.0,
+            y=1.18,
+            xanchor="left",
+            yanchor="bottom",
+            bgcolor="rgba(0, 0, 0, 0.0)"
+        ),
+        margin=dict(l=48, r=48, t=40, b=30),
+        height=380
     )
 
-current_step = st.session_state.current_step
-step_row = df[df["step"] == current_step].iloc[0]
-timestamp = step_row["timestamp"]
-st.caption(f"**Current Step:** {current_step} / {total_steps - 1} | **Timestamp:** {timestamp:.2f} s")
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+else:
+    st.info("Please select one or more signals from the sidebar to display plots.")
 
 # -----------------------------------------------------------------------------
-# Frame Control Interface
+# 2. Base Sliders & Control (Fixed Callbacks)
 # -----------------------------------------------------------------------------
-#st.subheader("🕹️ Simulation Playback Controls")
-#
-#col_prev, col_step, col_next = st.columns([1, 4, 1])
-#
-#if "current_step" not in st.session_state:
-#    st.session_state.current_step = 0
-#
-#with col_prev:
-#    if st.button("⬅️ Previous Step"):
-#        if st.session_state.current_step > 0:
-#            st.session_state.current_step -= 1
-#
-#with col_next:
-#    if st.button("Next Step ➡️"):
-#        if st.session_state.current_step < total_steps - 1:
-#            st.session_state.current_step += 1
-#
-#with col_step:
-#    current_step = st.slider(
-#        "Step / Frame Index",
-#        min_value=0,
-#        max_value=total_steps - 1,
-#        value=st.session_state.current_step,
-#        key="step_slider"
-#    )
-#    st.session_state.current_step = current_step
-#
-#step_row = df[df["step"] == current_step].iloc[0]
-#timestamp = step_row["timestamp"]
-#st.caption(f"**Current Step:** {current_step} / {total_steps - 1} | **Timestamp:** {timestamp:.2f} s")
+separate_control = st.session_state.get("separate_control_active", False)
+
+if not separate_control:
+    col_prev, col_step, col_next = st.columns([0.4, 12, 0.4])
+    with col_prev:
+        st.button("◀", on_click=decrement_both, use_container_width=True)
+    with col_next:
+        st.button("▶", on_click=increment_both, use_container_width=True)
+    with col_step:
+        st.slider(
+            "Synchronized Step / Frame Index",
+            min_value=0,
+            max_value=max_total_steps - 1,
+            key="sync_step",
+            on_change=on_sync_slider_change,
+            label_visibility="collapsed"
+        )
+else:
+    # Stacked Sliders
+    st.markdown("**Run 1 Playback Control**")
+    col_p1, col_s1, col_n1 = st.columns([0.4, 12, 0.4])
+    with col_p1:
+        st.button("◀", on_click=decrement_step1, use_container_width=True, key="prev_r1")
+    with col_n1:
+        st.button("▶", on_click=increment_step1, use_container_width=True, key="next_r1")
+    with col_s1:
+        st.slider(
+            "Step / Frame (Run 1)",
+            min_value=0,
+            max_value=total_steps1 - 1,
+            key="current_step1",
+            label_visibility="collapsed"
+        )
+
+    st.markdown("**Run 2 Playback Control**")
+    col_p2, col_s2, col_n2 = st.columns([0.4, 12, 0.4])
+    with col_p2:
+        st.button("◀", on_click=decrement_step2, use_container_width=True, key="prev_r2")
+    with col_n2:
+        st.button("▶", on_click=increment_step2, use_container_width=True, key="next_r2")
+    with col_s2:
+        st.slider(
+            "Step / Frame (Run 2)",
+            min_value=0,
+            max_value=total_steps2 - 1,
+            key="current_step2",
+            label_visibility="collapsed"
+        )
+#ts1 = step_row1["timestamp"]
+#if compare_runs:
+#    ts2 = step_row2["timestamp"]
+#    st.caption(f"**Run 1:** Step {current_step1}/{total_steps1 - 1} | Time: {ts1:.2f}s  ——  **Run 2:** Step {current_step2}/{total_steps2 - 1} | Time: {ts2:.2f}s")
+#else:
+#    st.caption(f"**Current Step:** {current_step1} / {total_steps1 - 1} | **Timestamp:** {ts1:.2f} s")
 #
 #st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# Main Visualization View (Frames & Interactive Plots)
+# 3. Frame Visualization
 # -----------------------------------------------------------------------------
-view_col1, view_col2 = st.columns([1, 1])
+st.subheader("🖼️ Frame Visualization")
 
-with view_col1:
-    st.subheader("🖼️ Frame Visualization")
-#    
-#    # Option 1: Try individual PNG file in directory first
-#    frame_image_path = Path(frames_dir) / f"frame_{current_step:02d}.png"
-#    if not frame_image_path.exists():
-#        # Try without zero-padding naming standard
-#        frame_image_path = Path(frames_dir) / f"frame_{current_step}.png"
-#    
-#    if frame_image_path.exists():
-#        st.image(str(frame_image_path), caption=f"Frame File: {frame_image_path.name}", use_container_width=True)
-#    
-    # Option 2: Extract frame directly from animated GIF by frame index
-    if Path(gif_file).exists():
-        extracted_frame = get_gif_frame(gif_file, current_step)
-        st.image(extracted_frame, caption=f"GIF Frame Index: {current_step}", use_container_width=True)
+if compare_runs:
+    img_col1, img_col2 = st.columns(2)
+    with img_col1:
+        st.markdown(f"**Run 1:** `{Path(jsonl_file1).name}`")
+        if Path(gif_file1).exists():
+            frame1 = get_gif_frame(gif_file1, current_step1)
+            st.image(frame1, caption=f"Run 1 Frame: {current_step1}", use_container_width=True)
+        else:
+            st.warning(f"File `{gif_file1}` not found.")
+    with img_col2:
+        st.markdown(f"**Run 2:** `{Path(jsonl_file2).name}`")
+        if Path(gif_file2).exists():
+            frame2 = get_gif_frame(gif_file2, current_step2)
+            st.image(frame2, caption=f"Run 2 Frame: {current_step2}", use_container_width=True)
+        else:
+            st.warning(f"File `{gif_file2}` not found.")
+else:
+    if Path(gif_file1).exists():
+        extracted_frame = get_gif_frame(gif_file1, current_step1)
+        st.image(extracted_frame, caption=f"GIF Frame Index: {current_step1}", use_container_width=True)
     else:
-        st.warning(f"No image found for step {current_step} in `{frames_dir}` or `{gif_file}`.")
-
-with view_col2:
-    st.subheader("📈 Real-time Signal Plots")
-    
-    if selected_signals:
-        fig = go.Figure()
-        
-        for sig in selected_signals:
-            # Complete signal trend curve
-            fig.add_trace(go.Scatter(
-                x=df["step"],
-                y=df[sig],
-                mode="lines",
-                name=sig,
-                opacity=0.6
-            ))
-            
-            # Highlight current active step marker point
-            fig.add_trace(go.Scatter(
-                x=[current_step],
-                y=[step_row[sig]],
-                mode="markers",
-                marker=dict(size=10, symbol="circle"),
-                name=f"{sig} (Current)",
-                showlegend=False
-            ))
-
-        # Vertical indicator cursor matching the visible GIF frame
-        fig.add_vline(
-            x=current_step,
-            line_width=2,
-            line_dash="dash",
-            line_color="red"
-        )
-
-        fig.update_layout(
-            xaxis_title="Step",
-            yaxis_title="Value",
-            legend=dict(orientation="h", y=-0.2),
-            margin=dict(l=20, r=20, t=30, b=20),
-            height=450
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Please select one or more signals from the sidebar to display plots.")
+        st.warning(f"File `{gif_file1}` not found.")
 
 # -----------------------------------------------------------------------------
-# Step Data Inspector (Raw Values)
+# 4. Step Data Inspector
 # -----------------------------------------------------------------------------
 with st.expander("🔍 Inspect Raw Log Entry Data for Current Step"):
-    raw_payload = step_row.to_dict()
-    st.json(raw_payload)
+    if compare_runs:
+        insp_col1, insp_col2 = st.columns(2)
+        with insp_col1:
+            st.markdown("**Run 1 Data**")
+            st.json(step_row1.to_dict())
+        with insp_col2:
+            st.markdown("**Run 2 Data**")
+            st.json(step_row2.to_dict())
+    else:
+        st.json(step_row1.to_dict())
