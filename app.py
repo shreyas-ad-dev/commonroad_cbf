@@ -361,14 +361,6 @@ else:
             key="current_step2",
             label_visibility="collapsed"
         )
-#ts1 = step_row1["timestamp"]
-#if compare_runs:
-#    ts2 = step_row2["timestamp"]
-#    st.caption(f"**Run 1:** Step {current_step1}/{total_steps1 - 1} | Time: {ts1:.2f}s  ——  **Run 2:** Step {current_step2}/{total_steps2 - 1} | Time: {ts2:.2f}s")
-#else:
-#    st.caption(f"**Current Step:** {current_step1} / {total_steps1 - 1} | **Timestamp:** {ts1:.2f} s")
-#
-#st.markdown("---")
 
 # -----------------------------------------------------------------------------
 # 3. Frame Visualization
@@ -401,14 +393,74 @@ else:
 # -----------------------------------------------------------------------------
 # 4. Step Data Inspector
 # -----------------------------------------------------------------------------
-with st.expander("🔍 Inspect Raw Log Entry Data for Current Step"):
+def build_nested_dict(flat_dict: dict) -> dict:
+    """
+    Recursively transforms a dictionary with dot-notation keys
+    (e.g., 'ego.velocity.x': 5) into a nested dictionary structure,
+    handling edge cases where a key exists as both a scalar and a sub-path.
+    """
+    nested = {}
+    for key, val in flat_dict.items():
+        parts = str(key).split(".")
+        current = nested
+        
+        for i, part in enumerate(parts[:-1]):
+            # If the key doesn't exist or is a scalar, re-initialize it as a dict
+            if part not in current or not isinstance(current[part], dict):
+                if part in current:
+                    # Move existing scalar value to a reserved key so it isn't lost
+                    existing_val = current[part]
+                    current[part] = {"_value": existing_val}
+                else:
+                    current[part] = {}
+            current = current[part]
+            
+        leaf = parts[-1]
+        # If leaf already contains a dictionary built by earlier paths, store under '_value'
+        if leaf in current and isinstance(current[leaf], dict):
+            current[leaf]["_value"] = val
+        else:
+            current[leaf] = val
+            
+    return nested
+
+def render_dynamic_json_expanders(data: dict):
+    """
+    Recursively renders nested dictionaries directly into expanders,
+    rendering leaf dictionaries as clean JSON key-value pairs without tables or extra levels.
+    """
+    for key, value in data.items():
+        key_label = str(key).replace("_", " ").title()
+        
+        if isinstance(value, dict) and value:
+            # Check if any child elements are themselves dictionaries
+            has_nested_children = any(isinstance(v, dict) for v in value.values())
+            
+            with st.expander(f"{key_label}", expanded=False):
+                if has_nested_children:
+                    # Recurse down for nested dicts
+                    render_dynamic_json_expanders(value)
+                else:
+                    # Leaf dictionary: renders key-value pairs directly inline
+                    st.json(value)
+        else:
+            # Standalone scalar field fallback
+            st.write(f"**{key_label}:** `{value}`")
+
+with st.expander("🔍 Inspect Raw Log Entry Data for Current Step", expanded=False):
     if compare_runs:
         insp_col1, insp_col2 = st.columns(2)
+        
         with insp_col1:
-            st.markdown("**Run 1 Data**")
-            st.json(step_row1.to_dict())
+            st.markdown("### Run 1 Data")
+            row1_nested = build_nested_dict(step_row1.to_dict())
+            render_dynamic_json_expanders(row1_nested)
+
         with insp_col2:
-            st.markdown("**Run 2 Data**")
-            st.json(step_row2.to_dict())
+            st.markdown("### Run 2 Data")
+            row2_nested = build_nested_dict(step_row2.to_dict())
+            render_dynamic_json_expanders(row2_nested)
     else:
-        st.json(step_row1.to_dict())
+        row1_nested = build_nested_dict(step_row1.to_dict())
+        render_dynamic_json_expanders(row1_nested)
+
