@@ -3,3 +3,4 @@
 *.pyc
 archive_gifs/
 *.jsonl
+test/reports/
