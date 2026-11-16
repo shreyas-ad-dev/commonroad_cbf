@@ -205,6 +205,7 @@ class SideUltrasonicSensor(BaseSensor):
 
                 min_dist = min(float(np.hypot(pt[0], pt[1])) for pt in local_points)
                 detected_ids.add(obs.obstacle_id)
+                min_distances[obs.obstacle_id] = min_dist
 
                 visible_segments = []
                 pts = np.array(obs_poly.exterior.coords)[:-1]
