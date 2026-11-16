@@ -199,6 +199,10 @@ class MapModule:
         Returns:
             np.ndarray: An Nx2 numpy array of densely resampled [x, y] coordinates.
         """
+
+        if horizon_meters <= 0.0:
+            return np.empty((0,2), dtype=np.float64)
+
         # 1. Locate starting lanelet
         start_ids = self.lanelet_network.find_lanelet_by_position([ego.position])[0]
         if not start_ids:
