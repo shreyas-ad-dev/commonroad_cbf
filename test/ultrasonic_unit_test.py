@@ -12,20 +12,20 @@ integration tests.
 """
 
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from shapely.geometry import Polygon
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ultrasonic import SideUltrasonicSensor
+from src.config import TEST, USS
 from src.ego_state import EgoState
-from src.config import USS, TEST, VEHICLE
 from src.tracker import Detection
+from src.ultrasonic import SideUltrasonicSensor
 
 
 def make_ego(x=0.0, y=0.0, yaw=0.0, velocity=0.0):
@@ -70,13 +70,13 @@ def make_obstacle(
 
 
 def make_sensor(side="left", **kwargs):
-    defaults = dict(
-        range_max=8.0,
-        fov_deg=100.0,
-        side=side,
-        noise_std=0.0,
-        ray_count=31,
-    )
+    defaults = {
+        "range_max": 8.0,
+        "fov_deg": 100.0,
+        "side": side,
+        "noise_std": 0.0,
+        "ray_count": 31,
+    }
     defaults.update(kwargs)
     return SideUltrasonicSensor(**defaults)
 

@@ -1,13 +1,14 @@
 import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
+from src.cbf_solver import CVXPY_AVAILABLE, CBFQPSolver
 from src.config import VEHICLE
-from src.cbf_solver import CBFQPSolver, CVXPY_AVAILABLE
 from src.ego_state import EgoState
 from src.tracker import Detection, Track
 
@@ -224,18 +225,13 @@ Run from the repository root:
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import VEHICLE
-from src.cbf_solver import CBFQPSolver, CVXPY_AVAILABLE
-from src.ego_state import EgoState
-from src.tracker import Detection, Track
-
+from src.cbf_solver import CVXPY_AVAILABLE
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -587,13 +583,13 @@ def test_cvxpy_exception_falls_back_to_minimum_acceleration(monkeypatch):
 )
 @pytest.mark.skipif(not CVXPY_AVAILABLE, reason="cvxpy is not installed")
 def test_analytical_and_cvxpy_match_in_a_nonbinding_safety_case():
-    common = dict(
-        longitudinal_dist=1000.0,
-        v_ego=10.0,
-        v_target=10.0,
-        v_des=12.0,
-        dt=0.1,
-    )
+    common = {
+        "longitudinal_dist": 1000.0,
+        "v_ego": 10.0,
+        "v_target": 10.0,
+        "v_des": 12.0,
+        "dt": 0.1,
+    }
     analytical = CBFQPSolver(
         use_cvxpy=False, tau=0.5, a_min=-5.0, a_max=5.0
     ).solve(**common)
