@@ -4,14 +4,15 @@ Run from repository root: pytest -q tests/test_behavior_planner_unit.py
 Dependencies are replaced with fakes so these tests isolate BehaviorPlanner.
 """
 import sys
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import numpy as np
 import pytest
+
 import src.behavior_planner as behavior_planner_module
 from src.behavior_planner import BehaviorPlanner
 from src.config import BP, MAP
@@ -56,9 +57,9 @@ class FakeSensorSuite:
         self.clearance_calls = []
     def is_lane_change_safe_from_tracks(self, ego, target_offset, safety_gap_front,
                                         safety_gap_rear, lane_tolerance):
-        self.clearance_calls.append(dict(ego=ego, target_offset=target_offset,
-            safety_gap_front=safety_gap_front, safety_gap_rear=safety_gap_rear,
-            lane_tolerance=lane_tolerance))
+        self.clearance_calls.append({"ego": ego, "target_offset": target_offset,
+            "safety_gap_front": safety_gap_front, "safety_gap_rear": safety_gap_rear,
+            "lane_tolerance": lane_tolerance})
         return SimpleNamespace(is_safe=self.is_safe)
 
 
