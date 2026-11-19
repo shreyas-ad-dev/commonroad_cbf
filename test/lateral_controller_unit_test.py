@@ -6,16 +6,17 @@ set of EgoState attributes; EgoState itself should have its own unit tests.
 """
 
 import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
-from types import SimpleNamespace
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.config import LATERAL, MAP, STANLEY, VEHICLE
-from src.lateral_controller import generate_lane_change_path, StanleyController
+from src.lateral_controller import StanleyController, generate_lane_change_path
 
 
 def make_path_ego(

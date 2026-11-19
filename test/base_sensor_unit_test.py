@@ -7,15 +7,14 @@ These tests cover BaseSensor utilities only, not concrete sensor detection,
 FOV clipping, occlusion algorithms, noise, or tracking.
 """
 import sys
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 import numpy as np
 import pytest
-from shapely.geometry import Polygon
 
 from src.base_sensor import BaseSensor, SensorOcclusionData
 from src.config import VEHICLE
@@ -188,7 +187,6 @@ def test_obstacle_extraction_queries_requested_step():
 
         def state_at_time(self, step):
             steps.append(step)
-            return None
 
     sensor.get_obstacle_center_and_corners_in_local(
         make_ego(), RecordingObstacle(), 23)

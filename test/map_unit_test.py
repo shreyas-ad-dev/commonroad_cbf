@@ -6,8 +6,8 @@ Run from the repository root:
 Tests use small CommonRoad-like fakes to isolate map algorithms.
 """
 import sys
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))

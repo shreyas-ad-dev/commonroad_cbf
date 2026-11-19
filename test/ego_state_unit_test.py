@@ -9,17 +9,19 @@ Run from the repository root:
 """
 
 import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
 from shapely.geometry import Polygon
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
-from src.ego_state import EgoState, get_car_polygon
-from src.config import EGO, TEST
 from types import SimpleNamespace
+
+from src.ego_state import EgoState, get_car_polygon
+
 
 def make_ego(
     x=0.0,

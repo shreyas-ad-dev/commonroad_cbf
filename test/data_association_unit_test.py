@@ -5,19 +5,20 @@ small Track-like stub so that association tests do not depend on Kalman-filter
 or Track lifecycle behaviour; those belong in tracker unit tests.
 """
 import sys
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.config import DA
-from src.tracker import Detection
 from src.data_association import (
-    compute_cost_matrix,
     associate_detections_to_tracks,
+    compute_cost_matrix,
 )
+from src.tracker import Detection
 
 
 class DummyTrack:

@@ -20,7 +20,10 @@ sys.path.append(str(PROJECT_ROOT))
 
 import src.sensor_suite as module
 from src.sensor_suite import (
-    LaneClearanceResult, MultiObjectTracker, PerceptionState, SensorSuite,
+    LaneClearanceResult,
+    MultiObjectTracker,
+    PerceptionState,
+    SensorSuite,
 )
 from src.tracker import TrackState
 
