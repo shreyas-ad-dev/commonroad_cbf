@@ -1,4 +1,4 @@
-# run_zam.py
+# zam64.py
 import sys
 from pathlib import Path
 
