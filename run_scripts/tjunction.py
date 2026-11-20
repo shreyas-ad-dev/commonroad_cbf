@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 import numpy as np
+
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
 from src.config import VEHICLE

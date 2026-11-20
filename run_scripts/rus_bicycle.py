@@ -5,6 +5,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 import numpy as np
+
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
 from src.config import VEHICLE
@@ -18,7 +19,6 @@ from src.sensor_suite import SensorSuite
 from src.ultrasonic import SideUltrasonicSensor
 from src.utils import build_gif_and_cleanup, setup_frames_directory
 from src.visualizer import render_frame
-
 
 # -----------------------------------------------------------------------------
 # Configuration
