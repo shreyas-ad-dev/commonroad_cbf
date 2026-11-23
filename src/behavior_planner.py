@@ -189,7 +189,6 @@ class BehaviorPlanner:
 
         Returns:
             tuple[str, np.ndarray]: A tuple containing:
-                - state (str): Updated planner state ('LANE_KEEP' or 'LANE_CHANGE').
                 - active_path (np.ndarray): The active reference path trajectory coordinates.
         """
 
@@ -211,7 +210,7 @@ class BehaviorPlanner:
             
         if self.mode == "MAP_FOLLOW":
             updated_path = self.map_module.extract_target_lanelet_path(ego)
-            return self.state, updated_path
+            return updated_path
 
         if self.start_x is None or self.start_y is None:
             self.start_x = ego.x
@@ -230,13 +229,13 @@ class BehaviorPlanner:
                 self.target_offset = 0.0
                 self.mode = "MAP_FOLLOW"
                 updated_path = self.map_module.extract_target_lanelet_path( ego)
-                return self.state, updated_path
+                return updated_path
 
-            return self.state, current_path
+            return current_path
 
         distance_traveled = np.hypot(ego.x - self.start_x, ego.y - self.start_y)
         if distance_traveled < self.start_distance:
-            return self.state, current_path
+            return current_path
 
         lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(
                 ego=ego,
@@ -256,9 +255,9 @@ class BehaviorPlanner:
                 target_lane_offset=self.target_offset,
                 total_length=BP.MANEUVER_PATH_LENGTH_METERS
             )
-            return self.state, new_path
+            return new_path
 
-        return self.state, current_path
+        return current_path
 
     def get_log_data(self) -> dict:
         logged_lead_track = self._cached_lead_track.serialize() if self._cached_lead_track is not None else self._cached_lead_track
