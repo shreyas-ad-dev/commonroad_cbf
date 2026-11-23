@@ -93,7 +93,7 @@ for step in range(NUM_STEPS):
     ego.road_heading = map_module.get_road_heading_at_position(ego.position)
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
-    state, target_path = planner.update_plan(
+    target_path = planner.update_plan(
         ego=ego,
         step=step,
         sensor_suite=sensor_suite,
@@ -106,8 +106,6 @@ for step in range(NUM_STEPS):
         sensor_suite.clear_tracking()
         h_val = None
     else:
-        #lead_target = sensor_suite.track_lead(ego=ego, step=step, target_offset=0.0)
-
         lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 

@@ -105,13 +105,12 @@ for step in range(NUM_STEPS):
 
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
-    state, target_path = planner.update_plan(
+    target_path = planner.update_plan(
         ego=ego,
         step=step,
         sensor_suite=sensor_suite,
         current_path=target_path
     )
-
 
     road_heading = map_module.get_road_heading_at_position( ego.position)
 

@@ -102,21 +102,12 @@ for step in range(NUM_STEPS):
     sensor_suite.update(ego=ego, all_obstacles=surrounding_obstacles, step=step)
 
     # 2. High-Level Behavior Planning Update
-    state, target_path = planner.update_plan(
+    target_path = planner.update_plan(
         ego=ego,
         step=step,
         sensor_suite=sensor_suite,
         current_path=target_path
     )
-
-    # Check Lane Clearance using Fused Track/Sensor Checks
-#    clearance = sensor_suite.is_lane_change_safe_from_tracks(
-#        ego=ego,
-#        target_offset=lane_width,
-#        safety_gap_front=10.0,
-#        safety_gap_rear=8.0
-#    )
-#    target_clear = clearance.is_safe
 
     # 3. Lead Track Selection & CBF Safety Control
     if has_collided:
@@ -126,10 +117,6 @@ for step in range(NUM_STEPS):
         h_val = None
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
     else:
-        # Extract closest confirmed Kalman track directly from BehaviorPlanner
-       # lead_track = planner.get_lead_track(ego=ego, sensor_suite=sensor_suite)
-       # merge_hazard = planner.get_merge_hazard_track(ego=ego, sensor_suite=sensor_suite)
-       # lead_track = lead_track if merge_hazard is None else merge_hazard
         lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
