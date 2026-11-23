@@ -9,9 +9,10 @@ import numpy as np
 
 from src.behavior_planner import BehaviorPlanner
 from src.cbf_solver import CBFQPSolver
+from src.collision_checker import CollisionChecker
 from src.config import VEHICLE
 from src.datalogger import DataLogger
-from src.ego_state import EgoState, get_car_polygon
+from src.ego_state import EgoState
 from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
@@ -55,7 +56,7 @@ ego = EgoState(
     stanley_k_soft=1.0
 )
 
-
+collision_checker = CollisionChecker()
 
 # -----------------------------------------------------------------------------
 # 2. State Initialization & Module Setup
@@ -91,10 +92,6 @@ planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
 logger = DataLogger(output_path=JSON_PATH)
 target_path = map_module.extract_target_lanelet_path(ego=ego)
 
-has_collided = False
-collision_step = None
-collided_obstacle_id = None
-frozen_obs_states = {}
 frame_files = []
 
 # -----------------------------------------------------------------------------
@@ -125,7 +122,7 @@ for step in range(NUM_STEPS):
         eval_offset = 0.0
 
 
-    if has_collided:
+    if collision_checker.has_collided:
         u_control = 0.0
         steering_angle = 0.0
         sensor_suite.clear_tracking()
@@ -154,31 +151,11 @@ for step in range(NUM_STEPS):
 
         ego.update_kinematics(accel=u_control, steering_angle=steering_angle, reference_path=target_path, dt=scenario.dt)
 
-
-    surrounding_render_states = []
-
-    for obs in surrounding_obstacles:
-        if has_collided and obs.obstacle_id == collided_obstacle_id:
-            ox, oy, o_orient = frozen_obs_states[obs.obstacle_id]
-        else:
-            st = obs.state_at_time(step)
-            if st is None:
-                continue
-            ox, oy = st.position[0], st.position[1]
-            o_orient = getattr(st, "orientation", 0.0)
-
-        l = getattr(obs.obstacle_shape, "length", VEHICLE.DEFAULT_LENGTH)
-        w = getattr(obs.obstacle_shape, "width", VEHICLE.DEFAULT_WIDTH)
-        obs_poly, obs_corners = get_car_polygon(ox, oy, o_orient, length=l, width=w)
-
-        if not has_collided and ego.polygon.intersects(obs_poly):
-            has_collided = True
-            collision_step = step
-            collided_obstacle_id = obs.obstacle_id
-            frozen_obs_states[obs.obstacle_id] = (ox, oy, o_orient)
-
-        is_hit = has_collided and (obs.obstacle_id == collided_obstacle_id)
-        surrounding_render_states.append((obs, obs_corners, is_hit))
+    surrounding_render_states = collision_checker.evaluate_ground_truth_step(
+            ego=ego,
+            surrounding_obstacles=surrounding_obstacles,
+            step=step,
+            )
 
     frame_path = FRAMES_DIR / f"frame_{step:02d}.png"
     render_frame(
@@ -189,7 +166,7 @@ for step in range(NUM_STEPS):
         d_safe=d_safe,
         h_val=h_val,
         surrounding_states=surrounding_render_states,
-        has_collided=has_collided,
+        has_collided=collision_checker.has_collided,
         step=step,
         num_steps=NUM_STEPS,
         frame_path=frame_path,
@@ -218,7 +195,7 @@ gif_path = PROJECT_ROOT / GIF_NAME
 build_gif_and_cleanup(frame_files, gif_path, scenario.dt)
 
 print(f"\n ZAM Simulation Complete! Output saved to: '{gif_path.name}'")
-if has_collided:
-    print(f" Collision detected at Step {collision_step}.")
+if collision_checker.has_collided:
+    print(f" Collision detected at Step {collision_checker.collision_step}.")
 else:
     print(" SAFE! CBF Safety Control maintained nominal distance.")
