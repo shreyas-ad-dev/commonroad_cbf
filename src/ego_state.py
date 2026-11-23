@@ -5,7 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 from shapely.geometry import Polygon
 
-from src.config import EGO, TEST
+from src.config import EGO, STANLEY, TEST
+from src.lateral_controller import StanleyController
 
 
 def get_car_polygon(
@@ -68,6 +69,15 @@ class EgoState:
     width: float        # Vehicle width in meters
     wheelbase: float
     road_heading: float | None = None
+    stanley_k: float = STANLEY.DEFAULT_STANLEY_GAIN
+    stanley_k_soft: float = STANLEY.DEFAULT_SOFTENING_GAIN
+
+    def __post_init__(self) -> None:
+        self.controller = StanleyController(
+                k=self.stanley_k,
+                k_soft=self.stanley_k_soft,
+                wheelbase=self.wheelbase
+                )
 
     # -------------------------------------------------------------------------
     # Properties & Vector Helpers
@@ -190,6 +200,7 @@ class EgoState:
             self, 
             accel: float, 
             steering_angle: float = 0.0, 
+            reference_path: np.ndarray | None = None,
             dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC 
         ) -> None:
         """
@@ -203,6 +214,15 @@ class EgoState:
             steering_angle (float, optional): Front wheel steering angle in radians. Defaults to 0.0.
             dt (float, optional): Integration time step in seconds. Defaults to 0.1.
                 """
+
+        if steering_angle is not None:
+            delta = float(steering_angle)
+        elif reference_path is not None and len(reference_path) >= 2:
+            delta = self.controller.compute_steering(ego=self, reference_path=reference_path)
+        else:
+            delta = 0.0
+            self.controller.steering = 0.0
+
         # 1. Next speed clipped to non-negative
         v_next = max(0.0, self.velocity + accel * dt)
         v_avg = 0.5 * (self.velocity + v_next)
@@ -212,8 +232,8 @@ class EgoState:
         self.y += v_avg * np.sin(self.orientation) * dt
 
         # 3. Update heading angle (yaw rate = v_avg / L * tan(delta))
-        if abs(steering_angle) > EGO.STEERING_MIN_SENSITIVITY:
-            self.orientation += (v_avg / self.wheelbase) * np.tan(steering_angle) * dt
+        if abs(delta) > EGO.STEERING_MIN_SENSITIVITY:
+            self.orientation += (v_avg / self.wheelbase) * np.tan(delta) * dt
 
         # 4. Commit updated speed
         self.velocity = v_next

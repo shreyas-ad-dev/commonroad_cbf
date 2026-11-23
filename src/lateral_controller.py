@@ -1,9 +1,12 @@
 #src/lateral_controller.py
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 from src.config import LATERAL, MAP, STANLEY, VEHICLE
-from src.ego_state import EgoState
+if TYPE_CHECKING:
+    from src.ego_state import EgoState
 
 
 def generate_lane_change_path(
