@@ -77,7 +77,7 @@ sensor_suite = SensorSuite(
 
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=5.0, tau=0.5, a_min=-8.0, a_max=2.0, use_cvxpy=True)
 
-planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW")
+planner = BehaviorPlanner(map_module=map_module, mode="MAP_FOLLOW", collision_checker=collision_checker)
 logger = DataLogger(output_path=JSON_PATH)
 
 target_path = map_module.extract_target_lanelet_path(ego)
