@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+import copy
 import numpy as np
 from shapely.geometry import Polygon
 
@@ -254,8 +255,8 @@ class EgoState:
         steps = int(np.ceil(horizon_seconds / dt))
         trajectory: list[dict] = []
 
-        sim_ego = self.copy()
-        sim_ego.controller = self.controller.copy()
+        sim_ego = copy.copy(self)
+        sim_ego.controller = copy.copy(self.controller)
 
         for step in range(1, steps + 1):
             sim_ego.update_kinematics(
