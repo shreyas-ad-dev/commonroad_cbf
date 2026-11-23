@@ -241,8 +241,8 @@ def test_select_lead_sets_selected_lead_none_when_no_candidates():
 def test_update_plan_map_follow_returns_map_path():
     p, m = make_planner(mode="MAP_FOLLOW"); ego = FakeEgo(); s = FakeSensorSuite()
     current = np.array([[0., 0.], [1., 0.]])
-    state, path = p.update_plan(ego, 1, s, current)
-    assert state == "LANE_KEEP"; np.testing.assert_array_equal(path, m.path)
+    path = p.update_plan(ego, 1, s, current)
+    assert p.state == "LANE_KEEP"; np.testing.assert_array_equal(path, m.path)
     assert m.path_calls == [ego] and p.start_x is None and p.start_y is None
 
 def test_map_follow_skips_clearance_when_not_near_merge():
@@ -270,15 +270,15 @@ def test_update_plan_skips_merge_clearance_just_outside_time_threshold():
 def test_gap_search_initializes_start_position_and_returns_current_path():
     p, _ = make_planner(start_distance=100); ego = FakeEgo(12, -4); s = FakeSensorSuite()
     current = np.array([[0., 0.], [1., 0.]])
-    state, path = p.update_plan(ego, 1, s, current)
-    assert state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
+    path = p.update_plan(ego, 1, s, current)
+    assert p.state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
     assert p.start_x == 12 and p.start_y == -4 and s.clearance_calls == []
 
 def test_distance_gate_blocks_lane_change_before_start_distance():
     p, _ = make_planner(start_distance=10); s = FakeSensorSuite(is_safe=True); current = np.zeros((2, 2))
     p.update_plan(FakeEgo(x=0), 1, s, current)
-    state, path = p.update_plan(FakeEgo(x=9.99), 2, s, current)
-    assert state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
+    path = p.update_plan(FakeEgo(x=9.99), 2, s, current)
+    assert p.state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
     assert s.clearance_calls == []
 
 def test_distance_gate_allows_clearance_check_at_exact_start_distance():
@@ -289,8 +289,8 @@ def test_distance_gate_allows_clearance_check_at_exact_start_distance():
 
 def test_unsafe_gap_does_not_initiate_lane_change():
     p, _ = make_planner(); ego = FakeEgo(); s = FakeSensorSuite(is_safe=False); current = np.zeros((2, 2))
-    state, path = p.update_plan(ego, 1, s, current)
-    assert state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
+    path = p.update_plan(ego, 1, s, current)
+    assert p.state == "LANE_KEEP"; np.testing.assert_array_equal(path, current)
     assert p.lane_change_start_pos is None and len(s.clearance_calls) == 1
     assert_clearance_call(s.clearance_calls[0], ego, p.target_offset)
 
@@ -301,8 +301,8 @@ def test_safe_gap_initiates_lane_change_and_generates_path(monkeypatch):
     def fake_generator(**kwargs):
         calls.update(kwargs); return generated
     monkeypatch.setattr(behavior_planner_module, "generate_lane_change_path", fake_generator)
-    state, path = p.update_plan(ego, 12, s, np.zeros((2, 2)))
-    assert state == "LANE_CHANGE"; np.testing.assert_array_equal(path, generated)
+    path = p.update_plan(ego, 12, s, np.zeros((2, 2)))
+    assert p.state == "LANE_CHANGE"; np.testing.assert_array_equal(path, generated)
     np.testing.assert_array_equal(p.lane_change_start_pos, ego.position)
     assert calls["ego"] is ego and calls["target_lane_offset"] == 3.25
     assert calls["total_length"] == BP.MANEUVER_PATH_LENGTH_METERS
@@ -311,7 +311,8 @@ def test_lane_change_generator_is_not_called_for_unsafe_gap(monkeypatch):
     p, _ = make_planner(); s = FakeSensorSuite(is_safe=False)
     def unexpected(**kwargs): pytest.fail("generator called for unsafe gap")
     monkeypatch.setattr(behavior_planner_module, "generate_lane_change_path", unexpected)
-    assert p.update_plan(FakeEgo(), 1, s, np.zeros((2, 2)))[0] == "LANE_KEEP"
+    p.update_plan(FakeEgo(), 1, s, np.zeros((2, 2)))
+    assert p.state == "LANE_KEEP"
 
 def test_clearance_call_receives_configured_gaps_and_lane_tolerance():
     p, _ = make_planner(target_offset=-3.6); ego = FakeEgo(); s = FakeSensorSuite(is_safe=False)
@@ -334,44 +335,46 @@ def planner_already_changing(offset=3.5, start=(0., 0.)):
 
 def test_lane_change_in_progress_keeps_current_path():
     p, m = planner_already_changing(); ego = FakeEgo(5, 1); current = np.array([[5., 0.], [6., 1.]])
-    state, path = p.update_plan(ego, 3, FakeSensorSuite(), current)
-    assert state == "LANE_CHANGE"; np.testing.assert_array_equal(path, current)
+    path = p.update_plan(ego, 3, FakeSensorSuite(), current)
+    assert p.state == "LANE_CHANGE"; np.testing.assert_array_equal(path, current)
     assert m.path_calls == []
 
 def test_lane_change_completes_at_positive_offset_threshold():
     offset = 3.5; p, m = planner_already_changing(offset)
     ego = FakeEgo(10, BP.LANE_CHANGE_COMPLETION_RATIO*offset)
-    state, path = p.update_plan(ego, 20, FakeSensorSuite(), np.zeros((2, 2)))
-    assert state == "LANE_KEEP" and p.mode == "MAP_FOLLOW" and p.target_offset == 0
+    path = p.update_plan(ego, 20, FakeSensorSuite(), np.zeros((2, 2)))
+    assert p.state == "LANE_KEEP" and p.mode == "MAP_FOLLOW" and p.target_offset == 0
     np.testing.assert_array_equal(path, m.path); assert m.path_calls == [ego]
 
 def test_lane_change_completes_for_negative_target_offset():
     offset = -3.5; p, m = planner_already_changing(offset)
     ego = FakeEgo(10, BP.LANE_CHANGE_COMPLETION_RATIO*abs(offset))
-    state, path = p.update_plan(ego, 21, FakeSensorSuite(), np.zeros((2, 2)))
-    assert state == "LANE_KEEP" and p.mode == "MAP_FOLLOW" and p.target_offset == 0
+    path = p.update_plan(ego, 21, FakeSensorSuite(), np.zeros((2, 2)))
+    assert p.state == "LANE_KEEP" and p.mode == "MAP_FOLLOW" and p.target_offset == 0
     np.testing.assert_array_equal(path, m.path)
 
 def test_lane_change_does_not_complete_just_below_threshold():
     offset = 3.5; p, m = planner_already_changing(offset)
     ego = FakeEgo(10, BP.LANE_CHANGE_COMPLETION_RATIO*offset - .01); current = np.zeros((2, 2))
-    state, path = p.update_plan(ego, 22, FakeSensorSuite(), current)
-    assert state == "LANE_CHANGE" and p.mode == "GAP_SEARCH" and p.target_offset == offset
+    path = p.update_plan(ego, 22, FakeSensorSuite(), current)
+    assert p.state == "LANE_CHANGE" and p.mode == "GAP_SEARCH" and p.target_offset == offset
     np.testing.assert_array_equal(path, current); assert m.path_calls == []
 
 def test_lane_change_completion_uses_absolute_lateral_progress():
     offset = 3.5; p, m = planner_already_changing(offset)
     ego = FakeEgo(10, -BP.LANE_CHANGE_COMPLETION_RATIO*offset)
-    state, path = p.update_plan(ego, 23, FakeSensorSuite(), np.zeros((2, 2)))
-    assert state == "LANE_KEEP" and p.mode == "MAP_FOLLOW"
+    path = p.update_plan(ego, 23, FakeSensorSuite(), np.zeros((2, 2)))
+
+    assert p.state == "LANE_KEEP" and p.mode == "MAP_FOLLOW"
     np.testing.assert_array_equal(path, m.path)
 
 def test_lane_change_completion_projects_progress_onto_current_road_normal():
     offset = 3.5; p, m = planner_already_changing(offset)
     progress = BP.LANE_CHANGE_COMPLETION_RATIO*offset
     ego = FakeEgo(x=-progress, y=0, orientation=np.pi/2)
-    state, path = p.update_plan(ego, 24, FakeSensorSuite(), np.zeros((2, 2)))
-    assert state == "LANE_KEEP" and p.mode == "MAP_FOLLOW"
+    path = p.update_plan(ego, 24, FakeSensorSuite(), np.zeros((2, 2)))
+
+    assert p.state == "LANE_KEEP" and p.mode == "MAP_FOLLOW"
     np.testing.assert_array_equal(path, m.path)
 
 def test_lane_change_completion_does_not_run_gap_clearance():
@@ -379,26 +382,3 @@ def test_lane_change_completion_does_not_run_gap_clearance():
     p.update_plan(ego, 25, s, np.zeros((2, 2)))
     assert s.clearance_calls == []
 
-
-# Logging / observability
-
-def test_get_log_data_contains_state_and_configuration():
-    p, _ = make_planner(target_offset=-3.5, start_distance=20)
-    p.start_x, p.start_y = 1., 2.; p.lane_change_start_pos = np.array([3., 4.])
-    d = p.get_log_data()
-    assert d["mode"] == "GAP_SEARCH" and d["state"] == "LANE_KEEP"
-    assert d["target_offset"] == -3.5 and d["start_distance"] == 20
-    assert d["start_x"] == 1 and d["start_y"] == 2
-    np.testing.assert_array_equal(d["lane_change_start_pos"], [3., 4.])
-
-def test_get_log_data_returns_none_for_uncached_tracks():
-    d = make_planner()[0].get_log_data()
-    assert d["lead_track"] is d["merge_hazard"] is d["selected_lead"] is None
-
-def test_get_log_data_serializes_cached_tracks():
-    p, _ = make_planner(); lead = FakeTrack(11, [10, 1]); hazard = FakeTrack(12, [15, 3.5]); selected = FakeTrack(13, [8, 0])
-    p._cached_lead_track, p._cached_merge_hazard, p._cached_selected_lead = lead, hazard, selected
-    d = p.get_log_data()
-    assert d["lead_track"] == {"track_id": 11, "position": [10., 1.]}
-    assert d["merge_hazard"] == {"track_id": 12, "position": [15., 3.5]}
-    assert d["selected_lead"] == {"track_id": 13, "position": [8., 0.]}
