@@ -12,7 +12,6 @@ from src.cbf_solver import CBFQPSolver
 from src.config import VEHICLE
 from src.datalogger import DataLogger
 from src.ego_state import EgoState, get_car_polygon
-from src.lateral_controller import StanleyController
 from src.map import MapModule
 from src.radar import RadarSensor
 from src.scenario_loader import load_scenario_and_ego
@@ -51,7 +50,9 @@ ego = EgoState(
     velocity=DESIRED_SPEED,
     length=ego_params["length"],
     width=ego_params["width"],
-    wheelbase=ego_params.get("wheelbase", VEHICLE.DEFAULT_WHEELBASE)
+    wheelbase=ego_params.get("wheelbase", VEHICLE.DEFAULT_WHEELBASE),
+    stanley_k=0.7,
+    stanley_k_soft=1.0
 )
 
 print(f" Loaded Scenario: {scenario.scenario_id}")
@@ -78,7 +79,6 @@ sensor_suite = SensorSuite(
 )
 
 cbf_solver = CBFQPSolver(gamma=1.2, d_min=6.0, tau=0.5, a_min=-8.0, a_max=2.0, use_cvxpy=True)
-stanley_ctrl = StanleyController(k=0.7, k_soft=1.0, wheelbase=ego.wheelbase)
 
 lane_width = map_module.get_current_lane_width(ego=ego)
 
@@ -117,6 +117,7 @@ for step in range(NUM_STEPS):
         h_val = None
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
     else:
+        steering_angle = None
         lead_track = planner.select_lead_track(ego=ego, sensor_suite=sensor_suite)
         d_safe = cbf_solver.d_min + (ego.velocity * cbf_solver.tau)
 
@@ -140,8 +141,7 @@ for step in range(NUM_STEPS):
             u_control = 0.5 * (DESIRED_SPEED - ego.velocity)
 
         # Steering execution & Kinematics propagation
-        steering_angle = stanley_ctrl.compute_steering(ego=ego, reference_path=target_path)
-        ego.update_kinematics(accel=u_control, steering_angle=steering_angle, dt=scenario.dt)
+        ego.update_kinematics(accel=u_control, steering_angle=steering_angle, reference_path=target_path, dt=scenario.dt)
 
     # 4. Collision Checking & Render Preparation
     surrounding_render_states = []
@@ -194,7 +194,6 @@ for step in range(NUM_STEPS):
                 "ego":ego.get_log_data(),
                 "cbf": cbf_solver.get_log_data(),
                 "planner": planner.get_log_data(),
-                "steering": stanley_ctrl.get_log_data(),
                 "sensors": sensor_suite.get_log_data()
                 }
             )
