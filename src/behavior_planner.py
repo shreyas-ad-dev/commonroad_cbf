@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from src.collision_checker import CollisionChecker
 from src.config import BP, MAP
 from src.ego_state import EgoState
 from src.lateral_controller import generate_lane_change_path
@@ -31,7 +32,8 @@ class BehaviorPlanner:
             map_module = MapModule,
             mode: str = "GAP_SEARCH",
             target_offset: float = 0.0,
-            start_distance: float = 0.0
+            start_distance: float = 0.0,
+            collision_checker: CollisionChecker | None = None,
         ):
         """
         Initializes the BehaviorPlanner instance.
@@ -46,6 +48,8 @@ class BehaviorPlanner:
         """
 
         self.map_module = map_module
+        self.collision_checker = collision_checker if collision_checker is not None else CollisionChecker()
+
 
         if mode not in ["GAP_SEARCH", "MAP_FOLLOW"]:
             raise ValueError("mode must be either 'GAP_SEARCH' or 'MAP_FOLLOW'")
@@ -95,75 +99,131 @@ class BehaviorPlanner:
         self._cached_lead_track = lead_track
         return lead_track
 
-    def select_lead_track(
-            self, 
-            ego: EgoState, 
-            sensor_suite: SensorSuite, 
-            merge_threshold: float = BP.LANE_MERGE_LOOKAHED_DISTANCE_METERS
-        ) -> Track | None:
-        """
-        Selects the active lead vehicle track. If a merge point is within threshold, scans adjacent merging corridors for hazard vehicles and assigns them as lead.
-        """
-        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
-        # 1. Standard lead vehicle directly ahead
-        primary_lead = self.get_lead_track(ego, sensor_suite)
+#    def select_lead_track(
+#            self, 
+#            ego: EgoState, 
+#            sensor_suite: SensorSuite, 
+#            merge_threshold: float = BP.LANE_MERGE_LOOKAHED_DISTANCE_METERS
+#        ) -> Track | None:
+#        """
+#        Selects the active lead vehicle track. If a merge point is within threshold, scans adjacent merging corridors for hazard vehicles and assigns them as lead.
+#        """
+#        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
+#        # 1. Standard lead vehicle directly ahead
+#        primary_lead = self.get_lead_track(ego, sensor_suite)
+#
+#        # 2. If within merge threshold, check adjacent merging lane
+#        if dist_to_merge <= merge_threshold:
+#            merge_hazard= self.get_merge_hazard_track(ego, sensor_suite, target_offset=self.target_offset)
+#
+#            if merge_hazard is not None:
+#                # If both exist, select whichever vehicle is closer longitudinally
+#                #if primary_lead is not None:
+#                    #u_road, _ = ego.road_frame_vectors
+#                    #dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
+#                    #dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
+#                    #return primary_lead if dist_primary < dist_hazard else merge_hazard
+#                sensor_suite.latest_perception.lead_target = merge_hazard 
+#                self._cached_selected_lead = merge_hazard
+#                return merge_hazard
+#
+#        sensor_suite.latest_perception.lead_target = primary_lead 
+#        self._cached_selected_lead = primary_lead
+#        return primary_lead
 
-        # 2. If within merge threshold, check adjacent merging lane
-        if dist_to_merge <= merge_threshold:
-            merge_hazard= self.get_merge_hazard_track(ego, sensor_suite, target_offset=self.target_offset)
-
-            if merge_hazard is not None:
-                # If both exist, select whichever vehicle is closer longitudinally
-                #if primary_lead is not None:
-                    #u_road, _ = ego.road_frame_vectors
-                    #dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
-                    #dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
-                    #return primary_lead if dist_primary < dist_hazard else merge_hazard
-                sensor_suite.latest_perception.lead_target = merge_hazard 
-                self._cached_selected_lead = merge_hazard
-                return merge_hazard
-
-        sensor_suite.latest_perception.lead_target = primary_lead 
-        self._cached_selected_lead = primary_lead
-        return primary_lead
+#    def get_merge_hazard_track(
+#            self,
+#            ego: EgoState,
+#            sensor_suite: SensorSuite,
+#            target_offset: float = 0.0
+#        ) -> Track | None:
+#        """
+#        Scans tracked objects in both Ego's lane and target merging lane corridor.
+#        """
+#        tracks = sensor_suite.tracked_objects
+#        if not tracks:
+#            return None
+#
+#        u_road, n_road = ego.road_frame_vectors
+#        closest_dist = float('inf')
+#        hazard_track = None
+#
+#        for track in tracks:
+#            d_vec = track.position - ego.position
+#            long_road = np.dot(d_vec, u_road)
+#            lat_road = np.dot(d_vec, n_road)
+#
+#            # Scan corridor including current lane and target merging lane offset
+#            if target_offset==0.0:
+#                in_merge_corridor = (abs(lat_road) <= MAP.DEFAULT_LANE_WIDTH_METERS) 
+#            else:
+#                in_merge_corridor = (abs(lat_road - target_offset) <= MAP.DEFAULT_LANE_WIDTH_METERS/2)
+#
+#            if (BP.MERGE_HAZARD_REAR_RANGE_METERS < long_road  < ego.velocity*BP.TTC_MAX  ) and in_merge_corridor:
+#                if long_road < closest_dist:
+#                    closest_dist = long_road
+#                    hazard_track = track
+#
+#
+#        sensor_suite.latest_perception.merge_hazard = hazard_track
+#        self._cached_merge_hazard = hazard_track
+#        return hazard_track
 
     def get_merge_hazard_track(
-            self,
-            ego: EgoState,
-            sensor_suite: SensorSuite,
-            target_offset: float = 0.0
-        ) -> Track | None:
+        self,
+        ego: EgoState,
+        sensor_suite: SensorSuite,
+        horizon_seconds: float = BP.MERGE_TIME_MAX,
+    ) -> Track | None:
         """
-        Scans tracked objects in both Ego's lane and target merging lane corridor.
+        Identifies the highest-priority merge hazard using predicted trajectory
+        polygon intersections between Ego and adjacent-lane tracks.
         """
-        tracks = sensor_suite.tracked_objects
-        if not tracks:
-            return None
-
-        u_road, n_road = ego.road_frame_vectors
-        closest_dist = float('inf')
-        hazard_track = None
-
-        for track in tracks:
-            d_vec = track.position - ego.position
-            long_road = np.dot(d_vec, u_road)
-            lat_road = np.dot(d_vec, n_road)
-
-            # Scan corridor including current lane and target merging lane offset
-            if target_offset==0.0:
-                in_merge_corridor = (abs(lat_road) <= MAP.DEFAULT_LANE_WIDTH_METERS) 
-            else:
-                in_merge_corridor = (abs(lat_road - target_offset) <= MAP.DEFAULT_LANE_WIDTH_METERS/2)
-
-            if (BP.MERGE_HAZARD_REAR_RANGE_METERS < long_road  < ego.velocity*BP.TTC_MAX  ) and in_merge_corridor:
-                if long_road < closest_dist:
-                    closest_dist = long_road
-                    hazard_track = track
-
+        conflict = self.collision_checker.get_merge_hazard(
+            ego=ego,
+            tracks=sensor_suite.tracked_objects,
+            horizon_seconds=horizon_seconds,
+            reference_path=self._cached_ref_path,
+        )
+        hazard_track = conflict.track if conflict is not None else None
 
         sensor_suite.latest_perception.merge_hazard = hazard_track
         self._cached_merge_hazard = hazard_track
         return hazard_track
+
+    def select_lead_track(
+        self,
+        ego: EgoState,
+        sensor_suite: SensorSuite,
+        merge_threshold: float = BP.LANE_MERGE_LOOKAHED_DISTANCE_METERS,
+    ) -> Track | None:
+        """
+        Selects the active lead vehicle track. If a merge point is within threshold,
+        checks adjacent merging trajectories for spatiotemporal conflicts.
+        """
+        dist_to_merge = self.map_module.get_distance_to_next_merge(ego)
+        primary_lead = self.get_lead_track(ego, sensor_suite)
+
+        if dist_to_merge <= merge_threshold:
+            merge_hazard = self.get_merge_hazard_track(ego=ego, sensor_suite=sensor_suite)
+
+            if merge_hazard is not None:
+                # If both an in-lane lead and a merge hazard exist, pick the closer one longitudinally
+                if primary_lead is not None:
+                    u_road, _ = ego.road_frame_vectors
+                    dist_primary = float(np.dot(primary_lead.position - ego.position, u_road))
+                    dist_hazard = float(np.dot(merge_hazard.position - ego.position, u_road))
+                    selected = primary_lead if dist_primary < dist_hazard else merge_hazard
+                else:
+                    selected = merge_hazard
+
+                sensor_suite.latest_perception.lead_target = selected
+                self._cached_selected_lead = selected
+                return selected
+
+        sensor_suite.latest_perception.lead_target = primary_lead
+        self._cached_selected_lead = primary_lead
+        return primary_lead
 
     def update_plan(self,
                     ego:EgoState,
@@ -210,6 +270,7 @@ class BehaviorPlanner:
             
         if self.mode == "MAP_FOLLOW":
             updated_path = self.map_module.extract_target_lanelet_path(ego)
+            self._cached_ref_path = updated_path
             return updated_path
 
         if self.start_x is None or self.start_y is None:
@@ -229,12 +290,15 @@ class BehaviorPlanner:
                 self.target_offset = 0.0
                 self.mode = "MAP_FOLLOW"
                 updated_path = self.map_module.extract_target_lanelet_path( ego)
+                self._cached_ref_path = updated_path
                 return updated_path
 
+            self._cached_ref_path = current_path
             return current_path
 
         distance_traveled = np.hypot(ego.x - self.start_x, ego.y - self.start_y)
         if distance_traveled < self.start_distance:
+            self._cached_ref_path = current_path
             return current_path
 
         lane_change_clearance_flags = sensor_suite.is_lane_change_safe_from_tracks(
@@ -255,8 +319,10 @@ class BehaviorPlanner:
                 target_lane_offset=self.target_offset,
                 total_length=BP.MANEUVER_PATH_LENGTH_METERS
             )
+            self._cached_ref_path = new_path
             return new_path
 
+        self._cached_ref_path = current_path
         return current_path
 
     def get_log_data(self) -> dict:

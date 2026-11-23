@@ -120,6 +120,7 @@ class Track:
 
         self.associated_obstacle_id = detection.obstacle_id
         self.associated_sensor_id = detection.sensor_id
+        self.last_heading: float | None = None
         self._cached_obstacle_trajectory_prediction = {}
 
     @property
@@ -144,6 +145,9 @@ class Track:
         self.hits += 1
         self.time_since_update = 0
         self.kf.update(detection.z[:2], detection.R)
+        speed = float(np.hypot(self.velocity[0], self.velocity[1]))
+        if speed > 0.5:
+            self.last_heading = float(np.arctan2(self.velocity[1], self.velocity[0]))
 
         # Confirm track if hit threshold is satisfied
         if self.state == TrackState.TENTATIVE and self.hits >= self.confirm_hits:
@@ -154,30 +158,67 @@ class Track:
         if self.time_since_update > self.max_age:
             self.state = TrackState.DELETED
 
-    def predict_trajectory(self, horizon_seconds: float) -> list[dict]:
-        """
-        Rolls out future position and covariance predictions over a time horizon without altering the live filter state.
-        """
+ #   def predict_trajectory(self, horizon_seconds: float) -> list[dict]:
+ #       """
+ #       Rolls out future position and covariance predictions over a time horizon without altering the live filter state.
+ #       """
 
-        steps = int(np.ceil(horizon_seconds /self.kf.dt))
+ #       steps = int(np.ceil(horizon_seconds /self.kf.dt))
+ #       trajectory = []
+
+ #       temp_kf = KalmanFilter2D(init_pos=self.position, dt=self.kf.dt)
+ #       temp_kf.x = self.kf.x.copy()
+ #       temp_kf.P = self.kf.P.copy()
+
+ #       for step in range(1, steps + 1):
+ #           x_pred = temp_kf.predict()
+
+ #           future_time = step * self.kf.dt
+ #           trajectory.append({
+ #               "time_offset": future_time,
+ #               "x": float(x_pred[0]),
+ #               "y": float(x_pred[1]),
+ #               "vx": float(x_pred[2]),
+ #               "vy": float(x_pred[3]),
+ #               "pos_cov": temp_kf.P[:2, :2].tolist()
+ #               })
+
+ #       self._cached_obstacle_trajectory_prediction = trajectory
+ #       return trajectory
+
+    def predict_trajectory(
+        self,
+        horizon_seconds: float,
+        fallback_heading: float = 0.0,
+    ) -> list[dict]:
+        """
+        Rolls out future position, orientation, and covariance predictions over a time horizon
+        without altering the live filter state.
+        """
+        steps = int(np.ceil(horizon_seconds / self.kf.dt))
         trajectory = []
 
         temp_kf = KalmanFilter2D(init_pos=self.position, dt=self.kf.dt)
         temp_kf.x = self.kf.x.copy()
         temp_kf.P = self.kf.P.copy()
 
+        default_heading = self.last_heading if self.last_heading is not None else fallback_heading
+
         for step in range(1, steps + 1):
             x_pred = temp_kf.predict()
+            vx, vy = float(x_pred[2]), float(x_pred[3])
+            speed = float(np.hypot(vx, vy))
+            orientation = float(np.arctan2(vy, vx)) if speed > 0.5 else default_heading
 
-            future_time = step * self.kf.dt
             trajectory.append({
-                "time_offset": future_time,
+                "time_offset": round(step * self.kf.dt, 6),
                 "x": float(x_pred[0]),
                 "y": float(x_pred[1]),
-                "vx": float(x_pred[2]),
-                "vy": float(x_pred[3]),
-                "pos_cov": temp_kf.P[:2, :2].tolist()
-                })
+                "vx": vx,
+                "vy": vy,
+                "orientation": orientation,
+                "pos_cov": temp_kf.P[:2, :2].tolist(),
+            })
 
         self._cached_obstacle_trajectory_prediction = trajectory
         return trajectory

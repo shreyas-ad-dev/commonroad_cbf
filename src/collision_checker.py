@@ -146,7 +146,7 @@ class CollisionChecker:
         fallback_heading = ego.road_heading if ego.road_heading is not None else ego.orientation
         obs_predictions = track.predict_trajectory(
             horizon_seconds=horizon_seconds,
-            fallback_heading=fallback_heading,
+            #fallback_heading=fallback_heading
         )
         if not obs_predictions:
             return None
