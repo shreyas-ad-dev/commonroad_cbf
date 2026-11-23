@@ -245,6 +245,7 @@ class EgoState:
                 "velocity": self.velocity,
                 "orientation_rad": self.orientation,
                 "orientation_deg": np.degrees(self.orientation),
+                "steering": self.controller.steering,
                 "length": self.length,
                 "width": self.width,
                 "wheelbase": self.wheelbase,
