@@ -238,6 +238,43 @@ class EgoState:
         # 4. Commit updated speed
         self.velocity = v_next
 
+    def forecast(
+        self,
+        horizon_seconds: float,
+        dt: float = TEST.DEFAULT_SAMPLING_TIME_SEC,
+        reference_path: np.ndarray | None = None,
+        accel: float = 0.0,
+    ) -> list[dict]:
+        """
+        Rolls out future Ego states over `horizon_seconds` without mutating self.
+
+        - If `reference_path` is provided, tracks it closed-loop using the internal StanleyController.
+        - If `reference_path` is None, propagates along current `orientation`.
+        """
+        steps = int(np.ceil(horizon_seconds / dt))
+        trajectory: list[dict] = []
+
+        sim_ego = self.copy()
+        sim_ego.controller = self.controller.copy()
+
+        for step in range(1, steps + 1):
+            sim_ego.update_kinematics(
+                accel=accel,
+                dt=dt,
+                reference_path=reference_path,
+            )
+            trajectory.append({
+                "time_offset": round(step * dt, 6),
+                "x": float(sim_ego.x),
+                "y": float(sim_ego.y),
+                "orientation": float(sim_ego.orientation),
+                "velocity": float(sim_ego.velocity),
+                "vx": float(sim_ego.velocity * np.cos(sim_ego.orientation)),
+                "vy": float(sim_ego.velocity * np.sin(sim_ego.orientation)),
+            })
+
+        return trajectory
+
     def get_log_data(self) -> dict:
         return {
                 "x": self.x,
