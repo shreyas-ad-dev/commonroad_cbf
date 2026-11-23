@@ -630,3 +630,103 @@ def test_update_kinematics_position_uses_pre_update_orientation():
     assert ego.x == pytest.approx(1.0)
     assert ego.y == pytest.approx(0.0)
     assert ego.orientation != pytest.approx(0.0)
+
+def test_update_kinematics_invokes_stanley_controller_when_steering_is_none(
+    monkeypatch,
+):
+    ego = make_ego(velocity=10.0)
+    reference_path = np.array([
+        [0.0, 0.0],
+        [10.0, 2.0],
+        [20.0, 4.0],
+    ])
+
+    expected_steering = 0.15
+    calls = []
+
+    def fake_compute_steering(*, ego, reference_path):
+        calls.append((ego, reference_path))
+        return expected_steering
+
+    monkeypatch.setattr(
+        ego.controller,
+        "compute_steering",
+        fake_compute_steering,
+    )
+
+    ego.update_kinematics(
+        accel=0.0,
+        steering_angle=None,
+        reference_path=reference_path,
+        dt=0.1,
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0] is ego
+    assert calls[0][1] is reference_path
+
+    expected_yaw = (
+        ego.velocity / ego.wheelbase
+    ) * np.tan(expected_steering) * 0.1
+
+    assert ego.orientation == pytest.approx(expected_yaw)
+
+def test_explicit_steering_angle_takes_precedence_over_reference_path(
+    monkeypatch,
+):
+    ego = make_ego(velocity=10.0)
+
+    def unexpected_controller_call(**kwargs):
+        pytest.fail("Stanley controller should not be invoked")
+
+    monkeypatch.setattr(
+        ego.controller,
+        "compute_steering",
+        unexpected_controller_call,
+    )
+
+    ego.update_kinematics(
+        accel=0.0,
+        steering_angle=0.2,
+        reference_path=np.array([
+            [0.0, 0.0],
+            [10.0, 5.0],
+        ]),
+        dt=0.1,
+    )
+
+    expected_yaw = (
+        10.0 / ego.wheelbase
+    ) * np.tan(0.2) * 0.1
+
+    assert ego.orientation == pytest.approx(expected_yaw)
+
+def test_zero_steering_command_overrides_stanley_during_collision(
+    monkeypatch,
+):
+    ego = make_ego(velocity=10.0)
+
+    def unexpected_controller_call(**kwargs):
+        pytest.fail("Stanley controller should not be invoked during override")
+
+    monkeypatch.setattr(
+        ego.controller,
+        "compute_steering",
+        unexpected_controller_call,
+    )
+
+    reference_path = np.array([
+        [0.0, 0.0],
+        [10.0, 5.0],
+    ])
+
+    ego.update_kinematics(
+        accel=0.0,
+        steering_angle=0.0,
+        reference_path=reference_path,
+        dt=0.1,
+    )
+
+    assert ego.orientation == pytest.approx(0.0)
+    assert ego.x == pytest.approx(1.0)
+    assert ego.y == pytest.approx(0.0)
